@@ -9,11 +9,9 @@
   # Calculate soil moisture deficit (need estimated actual ET)
   # Look into where rain_start from data (first rain obs for each event; see rain intensity mean calc below) differs from the rain_start we recorded during event delineations
   # Calculate antecedent precipitation rain index
-  # Update 2019 s::can NO3 predicted time series once those are finalized
-  # MDL correct 2019 Hford & Wade NO3 time series once they are finalized
   # Maybe update catchment areas in the event nutrient yield calculations to reflect new GIS data from Ravindra
+  # Currently using k = 0.95 for API calc; need to figure out if this is OK for this region
   
-
 
 # Load packages
   library("tidyverse")
@@ -169,11 +167,11 @@
       filter(!(site == "Hungerford" & (timestamp >= ymd_hms("2017-09-15 12:00:00", tz = "Etc/GMT+4") & timestamp <= ymd_hms("2017-11-10 13:15:00", tz = "Etc/GMT+4"))))
     rm(met_hford_17to19, met_hford_late19, met_wade_17to19, met_wade_late19)
     
-    test <- met %>% 
-      filter(site == "Wade" & timestamp >= ymd_hms("2017-10-24 12:00:00", tz = "Etc/GMT+4")) 
-    timetest <- ymd_hms("2017-10-24 17:15:00", tz = "UTC")
-    with_tz(timetest, "Etc/GMT+4")
-    timetest2 <- ymd_hms("2017-10-24 17:15:00", tz = "Etc/GMT+4")
+    # test <- met %>% 
+    #   filter(site == "Wade" & timestamp >= ymd_hms("2017-10-24 12:00:00", tz = "Etc/GMT+4")) 
+    # timetest <- ymd_hms("2017-10-24 17:15:00", tz = "UTC")
+    # with_tz(timetest, "Etc/GMT+4")
+    # timetest2 <- ymd_hms("2017-10-24 17:15:00", tz = "Etc/GMT+4")
     
   # Add 2017 tipping bucket data
     met_all <- bind_rows(met, precip_hford_15to17, precip_wade_14to17) %>% 
@@ -181,7 +179,6 @@
     rm(met, precip_hford_15to17, precip_wade_14to17)
     
 
-    
   # Trim MET data to first and last event of each year at each site
   # But add a 1-month buffer to beginning of each year so that we can calculate pre-event things for 30 days
   # What are the start and end times for each site and year?
@@ -292,15 +289,15 @@
    
     
 # SOIL SENSOR DATA ----
-  # Downloaded from Aquarius on 3/2/2020
+  # Downloaded from Aquarius on 10/19/2020
   # Should be a continuous 15-min time series (meaning I don't have to join it to a continuous 15-min time series to make one)
   soils <- read_csv("../../Soils/4_data/soilsData_selectSites_2017-2019_forFluxRegimes.csv", col_types = cols(Redox = col_double())) %>% 
     # The data are downloaded in EST (GMT-5)
     mutate(timestamp = ymd_hms(timestamp, tz = "Etc/GMT+5")) %>% 
     # Convert the times to EDT (GMT-4), because this is what the stream sensor data are in
     mutate(timestamp = with_tz(timestamp, tzone = "Etc/GMT+4"))
-  # Because HD Pit 1 data post 10/22/19 is missing the previous CSV does not include data >10/22/19 10:30 for ANY pits! Why?! Who knows
-  # Here are data from all other pits starting on 10/22/19 10:45
+  # Because HD Pit 1 data post 11/20/19 is missing the previous CSV does not include data >11/20/19 15:30 for ANY pits! Why?! Who knows
+  # Here are data from all other pits starting on 11/20/19 15:45
   soils2 <- read_csv("../../Soils/4_data/soilsData_selectSites_2017-2019_forFluxRegimes_2.csv", col_types = cols(Redox = col_double())) %>% 
     # The data are downloaded in EST (GMT-5)
     mutate(timestamp = ymd_hms(timestamp, tz = "Etc/GMT+5")) %>% 
@@ -394,8 +391,8 @@
     rm(p_hf, p_wade)
    
   # YSI stream temperature and turbidity   
-  # Data downloaded from Aquarius on 2020-04-10
-  ysi <- read_csv("../../Streams/02_site_data/YSI_allParams_allSites_2014-2019_downloaded_2020-04-10.csv", col_types = cols(DO_mgL = col_double())) %>% 
+  # Data downloaded from Aquarius on 2020-10-19
+  ysi <- read_csv("../../Streams/02_site_data/YSI_allParams_allSites_2014-2019_downloaded_2020-10-19.csv", col_types = cols(DO_mgL = col_double())) %>% 
     # Shorten site names to match all other dfs
     mutate(site = ifelse(site == "Hungerford Brook", "Hungerford", 
                          ifelse(site == "Potash Brook", "Potash", "Wade"))) %>% 
@@ -426,7 +423,8 @@
   rm(no3_all, p_all, ysi)
   
   # Join q_all to stream
-  stream <- full_join(stream, q_all, by = c("site", "timestamp"))
+  stream <- full_join(stream, q_all, by = c("site", "timestamp")) %>% 
+    filter(timestamp >= ymd_hms("2017-07-01 00:00:00", tz = "Etc/GMT+4"))
   
   # nodat <- stream %>% filter(site == "Wade" & timestamp >= ymd_hms("2018-06-14 00:00:00", tz = "Etc/GMT+4"))
 
@@ -434,14 +432,14 @@
 # GW LEVEL DATA ----
   # Data are water table depth below ground surface
   # Hungerford
-  gw_hf <- read_csv("../../Groundwater/02_site_data/water level data/Hungerford_GW_levelData.csv",  col_types = cols()) %>% 
+  gw_hf <- read_csv("../../Groundwater/02_site_data/water level data/Hungerford_GW_levelData_2020-09-10.csv",  col_types = cols(`hw str` = col_double())) %>% 
     mutate(site = "Hungerford") %>%
     rename(timestamp = "datetime", hwSTR = "hw str") %>% 
     # Replace 'hw' prefix w/ 'well'
     rename_at(vars(starts_with("hw")), 
               .funs = list(~ str_replace(., 'hw', 'well')))
   # Wade
-  gw_wd <- read_csv("../../Groundwater/02_site_data/water level data/Wade_GW_levelData.csv",  col_types = cols()) %>% 
+  gw_wd <- read_csv("../../Groundwater/02_site_data/water level data/Wade_GW_levelData_2020-09-10.csv",  col_types = cols(`ww str` = col_double(), ww6 = col_double())) %>% 
     mutate(site = "Wade") %>%
     rename(timestamp = "datetime", wwSTR = "ww str") %>% 
     # Replace 'ww' prefix w/ 'well'
@@ -449,7 +447,7 @@
               .funs = list(~ str_replace(., 'ww', 'well')))
   # Combine into one
   gw_all <- bind_rows(gw_hf, gw_wd) %>% 
-    mutate(timestamp = mdy_hm(timestamp, tz = "Etc/GMT+4")) %>% 
+    mutate(timestamp = ymd_hms(timestamp, tz = "Etc/GMT+4")) %>% 
     select(timestamp, site, well1, well2, well3, well4, well4a, well4b, everything()) %>% 
     filter(!is.na(timestamp))
   rm(gw_hf, gw_wd)
@@ -538,7 +536,7 @@
       # Convert dfs to data.tables
       # In addition, the function foverlaps requires that the keys in y (events_withRain) have matches in x (met_all)
       # so we have to create a 2nd time column (just a copy of timestamp) to match rain_start & event_end in events_withRain
-      setDT(met_all)[, Time2 := timestamp]
+      met_all[, Time2 := timestamp]
       setDT(events_withRain)
       # # Need to set keys for y (events_withRain) before the overlap join
       setkey(events_withRain, site, rain_start, event_end)
@@ -593,7 +591,7 @@
     # Convert dfs to data.tables
     # In addition, the function foverlaps requires that the keys in y (rain_start_end) have matches in x (met_all)
     # so we have to create a 2nd time column (just a copy of timestamp) to match rain_start & event_end in rain_start_end
-    setDT(met_all3)[, Time2 := timestamp]
+    met_all3[, Time2 := timestamp]
     setDT(rain_start_end)
     # # Need to set keys for y (rain_start_end) before the overlap join
     setkey(rain_start_end, site, rain_start, rain_end)
@@ -607,21 +605,10 @@
       summarize(rain_int_mmPERmin_mean = mean(precip_mm)/5)
     rm(met_all2, met_all3)
       
-  # Antecedent precipitation Index (API) over 4 days (used in Fovet et al 2018)
-    # See here for information about API formula: https://tonyladson.wordpress.com/tag/antecedent-precipitation-index/
-    # It might explain some of the variability we see in N:P yield ratios with small event water yields:
-      # From the website: High values of API mean the catchment is wet so any rain is likely to run off.Low values mean 
-        # there hasn’t been much rain lately, the catchment is dry so rain is likely to soak into soil and wet up vegetation 
-        # and not make it to a stream.  API has been related to initial loss i.e. the amount of rainfall that is ‘lost’ before 
-        # runoff starts (Cordery, 1970a; 1970b).  An example for the Bobo River in northern NSW is shown in Figure 1.  As the 
-        # API goes up, the catchment is wetter so the initial loss decreases and more rain will run off.
     
-  
   # Total rain for 1-day, 7-days, 14-days, and 30-days prior to event (prior to rain start)
   # Only considering events with a rain_start, so we'll use events_withRain df from above
     # Join rain_start to the met_all data
-    setDT(met_all)
-    setDT(events_withRain)
     events_withRain[, timestamp := rain_start]
     setkey(met_all, site, timestamp)
     setkey(events_withRain, site, timestamp)
@@ -633,49 +620,113 @@
     # test <- comb_met %>% filter(site == "Hungerford" & timestamp > ymd_hms("2017-10-04 20:00:00", tz = "Etc/GMT+4"))      
     
     # Calculate cumulative pre-event rain totals
-    # This is painfully slow; it would be nice to find a data.table solution
-    rain_preEvent_totals <- comb_met %>%
-      group_by(site) %>% 
-      # 288 rows 5 min/row = 1 day, so 288 rows/day
-      mutate(rain_preEvent_1d = ifelse(!is.na(rain_start), rollapply(data = lag(precip_mm, n = 1),
-                                                                      width = 288*1,
-                                                                      FUN = sum,
-                                                                      partial = FALSE,
-                                                                      align = "right",
-                                                                      fill = NA,
-                                                                      na.rm = T), NA),
-             rain_preEvent_7d = ifelse(!is.na(rain_start), rollapply(data = lag(precip_mm, n = 1),
-                                                                      width = 288*7,
-                                                                      FUN = sum,
-                                                                      partial = FALSE,
-                                                                      align = "right",
-                                                                      fill = NA,
-                                                                      na.rm = T), NA),
-             rain_preEvent_14d = ifelse(!is.na(rain_start), rollapply(data = lag(precip_mm, n = 1),
-                                                                      width = 288*14,
-                                                                      FUN = sum,
-                                                                      partial = FALSE,
-                                                                      align = "right",
-                                                                      fill = NA,
-                                                                      na.rm = T), NA), 
-             rain_preEvent_30d = ifelse(!is.na(rain_start), rollapply(data = lag(precip_mm, n = 1),
-                                                                      width = 288*30,
-                                                                      FUN = sum,
-                                                                      partial = FALSE,
-                                                                      align = "right",
-                                                                      fill = NA,
-                                                                      na.rm = T), NA))
+    # 288 rows 5 min/row = 1 day, so 288 rows/day
+    rain_preEvent_totals <- setDT(comb_met)[, c("rain_preEvent_1d", "rain_preEvent_2d", "rain_preEvent_3d", "rain_preEvent_4d", "rain_preEvent_7d", "rain_preEvent_14d", "rain_preEvent_30d") 
+                      := list(frollsum(lag(precip_mm, n = 1), n = 288*1, align = "right", fill = NA, na.rm = T),
+                              frollsum(lag(precip_mm, n = 1), n = 288*2, align = "right", fill = NA, na.rm = T),
+                              frollsum(lag(precip_mm, n = 1), n = 288*3, align = "right", fill = NA, na.rm = T),
+                              frollsum(lag(precip_mm, n = 1), n = 288*4, align = "right", fill = NA, na.rm = T),
+                              frollsum(lag(precip_mm, n = 1), n = 288*7, align = "right", fill = NA, na.rm = T),
+                              frollsum(lag(precip_mm, n = 1), n = 288*14, align = "right", fill = NA, na.rm = T),
+                              frollsum(lag(precip_mm, n = 1), n = 288*30, align = "right", fill = NA, na.rm = T)),
+                              by = site][!is.na(rain_start)][, c("site", "event_start", "rain_preEvent_1d", "rain_preEvent_2d", "rain_preEvent_3d", "rain_preEvent_4d", "rain_preEvent_7d", "rain_preEvent_14d", "rain_preEvent_30d")]
     
-    rain_preEvent_totals <- rain_preEvent_totals %>% 
-      ungroup() %>% 
-      filter(!is.na(rain_start)) %>% 
-      select(site, event_start, rain_preEvent_1d:rain_preEvent_30d)
-    rm(comb_met, met_all)
+    # Slower alternative method
+    # rain_preEvent_totals <- comb_met %>%
+    #   group_by(site) %>% 
+    #   # 288 rows 5 min/row = 1 day, so 288 rows/day
+    #   mutate(rain_preEvent_1d = ifelse(!is.na(rain_start), rollapply(data = lag(precip_mm, n = 1),
+    #                                                                   width = 288*1,
+    #                                                                   FUN = sum,
+    #                                                                   partial = FALSE,
+    #                                                                   align = "right",
+    #                                                                   fill = NA,
+    #                                                                   na.rm = T), NA),
+    #          rain_preEvent_7d = ifelse(!is.na(rain_start), rollapply(data = lag(precip_mm, n = 1),
+    #                                                                   width = 288*7,
+    #                                                                   FUN = sum,
+    #                                                                   partial = FALSE,
+    #                                                                   align = "right",
+    #                                                                   fill = NA,
+    #                                                                   na.rm = T), NA),
+    #          rain_preEvent_14d = ifelse(!is.na(rain_start), rollapply(data = lag(precip_mm, n = 1),
+    #                                                                   width = 288*14,
+    #                                                                   FUN = sum,
+    #                                                                   partial = FALSE,
+    #                                                                   align = "right",
+    #                                                                   fill = NA,
+    #                                                                   na.rm = T), NA), 
+    #          rain_preEvent_30d = ifelse(!is.na(rain_start), rollapply(data = lag(precip_mm, n = 1),
+    #                                                                   width = 288*30,
+    #                                                                   FUN = sum,
+    #                                                                   partial = FALSE,
+    #                                                                   align = "right",
+    #                                                                   fill = NA,
+    #                                                                   na.rm = T), NA))
     
-    # test2 <- comb_met %>% filter(site == "Hungerford" & timestamp >= ymd_hms("2017-11-02 06:45:00", tz = "Etc/GMT+4") & timestamp < ymd_hms("2017-11-03 06:45:00", tz = "Etc/GMT+4")) %>% 
-    #   summarize(total_rain = sum(precip_mm))
+    # Tidy up
+    # rain_preEvent_totals <- rain_preEvent_totals %>% 
+    #   filter(!is.na(rain_start)) %>% 
+    #   select(site, event_start, rain_preEvent_1d:rain_preEvent_30d)
+    
+  # Calculate Antecedent Precipitation Index (API) over 4 days (used in Fovet et al 2018)
+    # From the website: High values of API mean the catchment is wet so any rain is likely to run off.Low values mean 
+      # there hasn’t been much rain lately, the catchment is dry so rain is likely to soak into soil and wet up vegetation 
+      # and not make it to a stream.  API has been related to initial loss i.e. the amount of rainfall that is ‘lost’ before 
+      # runoff starts (Cordery, 1970a; 1970b).  An example for the Bobo River in northern NSW is shown in Figure 1.  As the 
+      # API goes up, the catchment is wetter so the initial loss decreases and more rain will run off.    
+    # Set the decay factor k for the API
+      # Without rain, the catchment wetness (as measured by API) declines each day by the factor k.  Any rain tops the API up again.
+      # The decay parameter k must be less than one and is usually between 0.85 and 0.98 (Lindsay et al., 1975).  Cordery (1970a) recommended 
+      # an average value of 0.92 for NSW catchments (in Australia) and found that k varied from 0.98 in winter to 0.86 in summer.  A constant, year round, 
+      # value of 0.95 was recommended by Hill et al. (2014).
+    
+      # Could regress log(soil water content) against time to estimate k maybe?
+      k = 0.95
+      
+    # First, calculate the amount of received each day (24 hrs) prior to the event for 4 days
+    # 288 rows 5 min/row = 1 day, so 288 rows/day
+    rain_API <- setDT(comb_met)[, c("rain_day1", "rain_day2", "rain_day3", "rain_day4") 
+                      := list(frollsum(lag(precip_mm, n = 1+288*0), n = 288, align = "right", fill = NA, na.rm = T),
+                              frollsum(lag(precip_mm, n = 1+288*1), n = 288, align = "right", fill = NA, na.rm = T),
+                              frollsum(lag(precip_mm, n = 1+288*2), n = 288, align = "right", fill = NA, na.rm = T),
+                              frollsum(lag(precip_mm, n = 1+288*3), n = 288, align = "right", fill = NA, na.rm = T)),
+                              by = site][!is.na(rain_start)][, c("site", "event_start", "rain_day1", "rain_day2", "rain_day3", "rain_day4")]
+    
+  # Let's join all the rain metrics into one df AND calculate the final 4-day API
+    rain_mets <- full_join(rain_event_total, rain_event_duration, by = c("site", "event_start")) %>% 
+      full_join(rain_event_intensity_max, by = c("site", "event_start")) %>% 
+      full_join(rain_event_intensity_mean, by = c("site", "event_start")) %>%
+      full_join(rain_preEvent_totals, by = c("site", "event_start")) %>%    
+      full_join(rain_API, by = c("site", "event_start")) %>% 
+      # 4-day API calc
+      mutate(API_4d = rain_event_total_mm + k^1*rain_day1 + k^2*rain_day2 + k^3*rain_day3 + k^4*rain_day4) %>% 
+      select(-c(rain_day1, rain_day2, rain_day3, rain_day4))
+    
+    rm(rain_event_total, rain_event_duration, rain_event_intensity_max, rain_event_intensity_mean, rain_preEvent_totals, rain_API, rain_start_end)
+    
+# Calculate MET metrics ----
+ # 1-day and 3-day means  
+  # 288 rows 5 min/row = 1 day, so 288 rows/day
+  airT_means <- setDT(comb_met)[, c("airT_1d", "airT_3d") 
+                    := list(frollmean(lag(temp_C, n = 1), n = 288*1, align = "right", fill = NA, na.rm = T),
+                            frollmean(lag(temp_C, n = 1), n = 288*3, align = "right", fill = NA, na.rm = T)),
+                            by = site][!is.na(event_start)][, c("site", "event_start", "airT_1d", "airT_3d")]
+  solarRad_means <- setDT(comb_met)[, c("solarRad_1d", "solarRad_3d") 
+                    := list(frollmean(lag(solarRad_wm2, n = 1), n = 288*1, align = "right", fill = NA, na.rm = T),
+                            frollmean(lag(solarRad_wm2, n = 1), n = 288*3, align = "right", fill = NA, na.rm = T)),
+                            by = site][!is.na(event_start)][, c("site", "event_start", "solarRad_1d", "solarRad_3d")]
+  dewPoint_means <- setDT(comb_met)[, c("dewPoint_1d", "dewPoint_3d") 
+                    := list(frollmean(lag(dewPoint, n = 1), n = 288*1, align = "right", fill = NA, na.rm = T),
+                            frollmean(lag(dewPoint, n = 1), n = 288*3, align = "right", fill = NA, na.rm = T)),
+                            by = site][!is.na(event_start)][, c("site", "event_start", "dewPoint_1d", "dewPoint_3d")]
+  # Join these
+  met_mets <- full_join(airT_means, solarRad_means, by = c("site", "event_start")) %>% 
+    full_join(dewPoint_means, by = c("site", "event_start"))
   
-    
+  rm(comb_met, met_all, airT_means, solarRad_means, dewPoint_means)
+
+  
 # Calculate discharge metrics ----
   # Peak discharge & delta Q (change in Q from beginning to to peak Q)
     # First add event data (event start to event end) to Q data using an overlap join
@@ -711,10 +762,8 @@
       select(-c(risingLimb_hrs, q_event_max, q_event_delta))
     rm(q_all2)
       
-  # Mean antecedent discharge - 1 & 7 days
+  # Mean antecedent discharge - 1 & 4 days
     # Join event_start to the q_all data
-      setDT(q_all)
-      setDT(events_all)
       events_all[, timestamp := event_start]
       setkey(q_all, site, timestamp)
       setkey(events_all, site, timestamp)
@@ -723,28 +772,11 @@
         arrange(site, timestamp)
       events_all[, "timestamp" := NULL]  
       
-    q_preEvent_means <- comb_q %>%
-      group_by(site, year) %>% 
-      # 1440 min/day / 15-min/row = 96 rows/day
-      mutate(q_preEvent_mean_1d = ifelse(!is.na(event_start), rollapply(data = lag(q_cms, n = 1),
-                                                                      width = 96*1,
-                                                                      FUN = mean,
-                                                                      partial = TRUE,
-                                                                      align = "right",
-                                                                      fill = NA,
-                                                                      na.rm = T), NA),
-             q_preEvent_mean_7d = ifelse(!is.na(event_start), rollapply(data = lag(q_cms, n = 1),
-                                                                      width = 96*7,
-                                                                      FUN = mean,
-                                                                      partial = TRUE,
-                                                                      align = "right",
-                                                                      fill = NA,
-                                                                      na.rm = T), NA))      
-    
-    q_preEvent_means <- q_preEvent_means %>% 
-      ungroup() %>% 
-      filter(!is.na(event_start)) %>% 
-      select(site, event_start, q_preEvent_mean_1d, q_preEvent_mean_7d)
+    # 1440 min/day / 15-min/row = 96 rows/day  
+    q_preEvent_means <- setDT(comb_q)[, c("q_1d", "q_4d") 
+                      := list(frollmean(lag(q_cms, n = 1), n = 96*1, align = "right", fill = NA, na.rm = T),
+                              frollmean(lag(q_cms, n = 1), n = 96*4, align = "right", fill = NA, na.rm = T)),
+                              by = site][!is.na(event_start)][, c("site", "event_start", "q_1d", "q_4d")] 
     rm(comb_q, q_all)
     
     
@@ -752,7 +784,6 @@
 # Calculate soil variable pre-event means ---- 
   # Join event_start to the soils_all data
     setDT(soils_all)
-    setDT(events_all)
     events_all[, timestamp := event_start]
     setkey(soils_all, site, timestamp)
     setkey(events_all, site, timestamp)
@@ -797,15 +828,16 @@
     #                                                               na.rm = T), NA))
   
 
-  nodat <- comb %>% filter(transect == "WW" & (timestamp >= ymd_hms("2018-05-15 00:00:00", tz = "Etc/GMT+4") & timestamp <= ymd_hms("2018-05-20 07:30:00", tz = "Etc/GMT+4"))) %>% 
-    filter(depth == 15 & pit %in% c(1, 6)) %>% 
-    pivot_wider(names_from = pit, values_from = c(DO:VWC))
-  summary(nodat)
+  # nodat <- comb %>% filter(transect == "WW" & (timestamp >= ymd_hms("2018-05-15 00:00:00", tz = "Etc/GMT+4") & timestamp <= ymd_hms("2018-05-20 07:30:00", tz = "Etc/GMT+4"))) %>% 
+  #   filter(depth == 15 & pit %in% c(1, 6)) %>% 
+  #   pivot_wider(names_from = pit, values_from = c(DO:VWC))
+  # summary(nodat)
   
   # test2 <- met_all2 %>% filter(event_start == ymd_hms("2017-08-03 14:39:00", tz = "Etc/GMT+4"))
   
   # Solution for multiple variables/columns at once
-  # This is pretty slow; would like to find a data.table solution at some point
+  # This is pretty slow (~4 min to run); would like to find a data.table solution at some point
+  # start_t <- Sys.time()
   comb <- comb %>%
     arrange(transect, pit, depth, timestamp) %>% 
     group_by(year, transect, pit, depth) %>% 
@@ -818,29 +850,56 @@
                                     ifelse(round(time_sinceLastEvent) >= 1 & round(time_sinceLastEvent) < 5, round(time_sinceLastEvent)*96, 4)),
            widthValue = replace(widthValue, is.na(widthValue), 48)) %>%     
     mutate_at(vars(c(DO, Redox, SoilTemp, VWC)),
-              .funs = list("mean_preEvent" = ~ ifelse(!is.na(event_start), rollapply(data = lag(., n = 1),
+              .funs = list("pre" = ~ ifelse(!is.na(event_start), rollapply(data = lag(., n = 1),
                                                                 width = widthValue,
                                                                 FUN = mean,
                                                                 partial = TRUE,
                                                                 align = "right",
                                                                 fill = NA,
                                                                 na.rm = T), NA)))
+  # end_t <- Sys.time()
+  # end_t - start_t  
   
   # Here are the soil variable means!
-  meanSoilVars <- comb %>% 
+  soil_means <- comb %>% 
     ungroup() %>% 
     filter(!is.na(event_start)) %>% 
-    select(site, transect, pit, depth, event_start, DO_mean_preEvent:VWC_mean_preEvent)
+    select(site, transect, pit, depth, event_start, DO_pre:VWC_pre)
   rm(comb, soils_all)
+  
+  
+  # Test alternative approach
+  # test <- comb %>%
+  #   arrange(transect, pit, depth, timestamp) %>% 
+  #   mutate(widthValue = ifelse(round(time_sinceLastEvent) >= 5, 5*96,
+  #                                   ifelse(round(time_sinceLastEvent) >= 1 & round(time_sinceLastEvent) < 5, round(time_sinceLastEvent)*96, 4)),
+  #          widthValue = replace(widthValue, is.na(widthValue), 48))
+  
+  
+  # This data.table solution did not work and took almost an hour to run
+  # start_t2 <- Sys.time()
+  # test2 <- setDT(test)[, c("DO_pre", "redox_pre", "soilT_pre", "VWC_pre") 
+  #                   := list(rollapply(lag(DO, n = 1), width = widthValue, FUN = mean, partial = TRUE, align = "right", fill = NA, na.rm = T),
+  #                           rollapply(lag(Redox, n = 1), width = widthValue, FUN = mean, partial = TRUE, align = "right", fill = NA, na.rm = T),
+  #                           rollapply(lag(SoilTemp, n = 1), width = widthValue, FUN = mean, partial = TRUE, align = "right", fill = NA, na.rm = T),
+  #                           rollapply(lag(VWC, n = 1), width = widthValue, FUN = mean, partial = TRUE, align = "right", fill = NA, na.rm = T)),
+  #                           by = list(transect, pit, depth, timestamp)][!is.na(event_start)][, c("site", "transect", "pit", "depth", "event_start", "DO_pre", "redox_pre", "soilT_pre", "VWC_pre")]
+  # end_t2 <- Sys.time()
+  # end_t2 - start_t2
+  
+  # Did not work
+  # soil_means <- setDT(test)[, c("DO_pre", "redox_pre") 
+  #                   := list(frollmean(lag(DO, n = 1), n = widthValue, align = "right", adaptive = TRUE, fill = NA, na.rm = T),
+  #                           frollmean(lag(Redox, n = 1), n = widthValue, align = "right", adaptive = TRUE, fill = NA, na.rm = T)),
+  #                           by = list(transect, pit, depth, timestamp)][!is.na(event_start)][, c("site", "transect", "pit", "depth", "event_start", "DO_pre", "redox_pre")]      
 
   
-# Calculate event solute & turbidity yields & max turbidity ---- 
+# Calculate event solute & turbidity yields, pre-event solute concs, & max turbidity ---- 
   # First add event data (event start to event end) to s::can data using an overlap join
     # Convert dfs to data.tables
     # In addition, the function foverlaps requires that the keys in y (events_all) have matches in x (stream)
     # so we have to create a 2nd time column (just a copy of timestamp) to match rain_start & event_end in events_all
     setDT(stream)[, Time2 := timestamp]
-    setDT(events_all)
     # # Need to set keys for y (events_all) before the overlap join
     setkey(events_all, site, event_start, event_end)
     # Here we do the overlap join by site and start and end dates
@@ -851,8 +910,10 @@
   stream <- stream %>% 
     # Simplify analyte names from mg/L to just chem. abbrev.
     rename(NO3 = NO3_mgNL, TP = TP_mgPL, TDP = TDP_mgPL, SRP = SRP_mgPL, PP = PP_mgPL) %>% 
-    # Add catchment_area as a column
-    mutate(catch_area_km2 = ifelse(site == "Hungerford", 48.1, 16.7)) %>% 
+    # Add catchment_area as a column (pre-Ravindra values)
+    # mutate(catch_area_km2 = ifelse(site == "Hungerford", 48.1, 16.7)) %>% 
+    # I'm updating the catchment areas to the new values that Ravindra calculated with the new geo data
+    mutate(catch_area_km2 = ifelse(site == "Hungerford", 43.8, 16.7)) %>%     
     # Add a condition column, i.e., event vs. baseflow
     mutate(condition = ifelse(is.na(eventid), "baseflow", "event")) %>%
     # Add a year column
@@ -865,12 +926,12 @@
     select(site, catch_area_km2, timestamp, year, season, condition, rain_start:event_end, q_cms, NO3:turb)
   
   # Write this to a CSV
-  stream %>% 
+  stream %>%
     mutate(timestamp = as.character(timestamp),
            rain_start = as.character(rain_start),
            event_start = as.character(event_start),
            falling_inf_pt = as.character(falling_inf_pt),
-           event_end = as.character(event_end)) %>% 
+           event_end = as.character(event_end)) %>%
     write_csv("Data/streamData_HF_WD_2017-2019.csv")
   
   # Calculate yield
@@ -928,6 +989,16 @@
     mutate(event_start = as.character(event_start)) %>% 
     write_csv("Data/event_yields_ratios.csv")
   
+  # Calculate 1-day pre-event solute means
+  # 1440 min/day / 15-min/row = 96 rows/day  
+  stream_means <- setDT(stream)[, c("NO3_1d", "SRP_1d", "turb_1d") 
+                    := list(frollmean(lag(NO3, n = 1), n = 96*1, align = "right", fill = NA, na.rm = T),
+                            frollmean(lag(SRP, n = 1), n = 96*1, align = "right", fill = NA, na.rm = T),
+                            frollmean(lag(turb, n = 1), n = 96*1, align = "right", fill = NA, na.rm = T)),
+                            by = site][!is.na(event_start)][, c("site", "event_start", "NO3_1d", "SRP_1d", "turb_1d")]
+  # Because of how I joined the event data to the stream data, I need to keep just the first row of each site-event_start combo
+  stream_means <- stream_means[, .SD[1], by = list(site, event_start)]
+
   # Calculate max turbidity
   turb_event_max <- stream %>% 
     filter(!is.na(event_start)) %>% 
@@ -947,7 +1018,6 @@
       # In addition, the function foverlaps requires that the keys in y (events_all) have matches in x (gw_all)
       # so we have to create a 2nd time column (just a copy of timestamp) to match rain_start & event_end in events_all
       setDT(gw_all)[, Time2 := timestamp]
-      setDT(events_all)
       # # Need to set keys for y (events_all) before the overlap join
       setkey(events_all, site, event_start, event_end)
       # Here we do the overlap join by site and start and end dates
@@ -973,8 +1043,6 @@
       
   # Mean antecedent discharge - 1 & 7 days
     # Join event_start to the gw_all data
-      setDT(gw_all)
-      setDT(events_all)
       events_all[, timestamp := event_start]
       setkey(gw_all, site, timestamp)
       setkey(events_all, site, timestamp)
@@ -983,40 +1051,25 @@
         arrange(site, timestamp)
       events_all[, "timestamp" := NULL]  
       
-    gw_preEvent_means <- comb_gw %>%
+    comb_gw_long <- comb_gw %>%
       pivot_longer(cols = c(well1:wellSTR), names_to = "well", values_to = "depth_m") %>% 
-      arrange(site, well, timestamp) %>% 
-      group_by(site, year, well) %>% 
-      # 1440 min/day / 15-min/row = 96 rows/day
-             # 1-day mean
-      mutate(gw_preEvent_mean_1d = ifelse(!is.na(event_start), rollapply(data = lag(depth_m, n = 1),
-                                                                      width = 96*1,
-                                                                      FUN = mean,
-                                                                      partial = TRUE,
-                                                                      align = "right",
-                                                                      fill = NA,
-                                                                      na.rm = T), NA),
-             # 7-day mean
-             gw_preEvent_mean_7d = ifelse(!is.na(event_start), rollapply(data = lag(depth_m, n = 1),
-                                                                      width = 96*7,
-                                                                      FUN = mean,
-                                                                      partial = TRUE,
-                                                                      align = "right",
-                                                                      fill = NA,
-                                                                      na.rm = T), NA))
+      arrange(site, well, timestamp)
+    
+    # 1440 min/day / 15-min/row = 96 rows/day
+    gw_preEvent_means <- setDT(comb_gw_long)[, c("gw_1d", "gw_7d") 
+                      := list(frollmean(lag(depth_m, n = 1), n = 96*1, align = "right", fill = NA, na.rm = T),
+                              frollmean(lag(depth_m, n = 1), n = 96*7, align = "right", fill = NA, na.rm = T)),
+                              by = list(site, year, well)][!is.na(event_start)][, c("site", "well", "event_start", "gw_1d", "gw_7d")]
     
     # test2 <- gw_preEvent_means %>% filter(site == "Hungerford" & well == "well1" & timestamp >= ymd_hms("2019-04-05 00:00:00", tz = "Etc/GMT+4"))
     # test3 <- gw_all %>% filter(site == "Hungerford" & timestamp >= ymd_hms("2019-04-05 00:00:00", tz = "Etc/GMT+4"))
     
     gw_preEvent_means <- gw_preEvent_means %>% 
-      ungroup() %>% 
-      filter(!is.na(event_start)) %>% 
-      select(site, well, event_start, gw_preEvent_mean_1d, gw_preEvent_mean_7d) %>% 
-      pivot_wider(names_from = well, values_from = c(gw_preEvent_mean_1d, gw_preEvent_mean_7d)) %>% 
+      pivot_wider(names_from = well, values_from = c(gw_1d, gw_7d)) %>% 
       # Choose which wells you want to keep
       select(site, event_start, matches("(3|5)$"))
     
-    rm(comb_gw, gw_all)
+    rm(comb_gw, comb_gw_long, gw_all, event)
     
   # Play sound when done!
   beep(sound = "fanfare") 
@@ -1026,14 +1079,11 @@
 
 # Join all variables together - don't forget PET ----
   # STILL NEED TO INCLUDE TIME SINCE LAST EVENT!
-  allvars <- full_join(rain_event_total, rain_event_duration, by = c("site", "event_start")) %>% 
-    full_join(rain_event_intensity_max, by = c("site", "event_start")) %>% 
-    full_join(rain_event_intensity_mean, by = c("site", "event_start")) %>% 
-    full_join(rain_preEvent_totals, by = c("site", "event_start")) %>%
-    full_join(q_event_max_delta, by = c("site", "event_start")) %>%
+  allvars <- full_join(rain_mets, q_event_max_delta, by = c("site", "event_start")) %>% 
     full_join(q_event_dQRate, by = c("site", "event_start")) %>%
     full_join(q_preEvent_means, by = c("site", "event_start")) %>% 
     full_join(stream_eventYields, by = c("site", "event_start")) %>% 
+    full_join(stream_means, by = c("site", "event_start")) %>% 
     full_join(turb_event_max, by = c("site", "event_start")) %>% 
     full_join(gw_event_max_delta, by = c("site", "event_start")) %>% 
     full_join(gw_preEvent_means, by = c("site", "event_start")) %>%   
@@ -1044,46 +1094,69 @@
     mutate(timestamp_hour = floor_date(event_start, unit = "1 hour")) %>%   
     left_join(PET %>% rename(timestamp_hour = timestamp), by = c("site", "timestamp_hour")) %>% 
     select(-timestamp_hour) %>% 
+    # Add day of year
+    mutate(DOY = yday(event_start)) %>% 
     # Shed rows with no event start
     filter(!is.na(event_start)) %>% 
     # Let's just look at events where all variables are complete
     # na.omit %>% 
     # Rearrange columns
-    select(site, event_start, season, everything())
+    select(site, event_start, DOY, season, everything())
   
   # Which soil vars to add?
   # Look at which transects, pits and depths we have
-  whichSoil <- meanSoilVars %>% 
+  whichSoil <- soil_means %>% 
     select(transect, pit, depth) %>% 
     distinct()
   
   # Let's do 15 cm only at HW 1 & 3 and WW 1 & 6
   # Choosing 15 cm only here b/c we have GW level data to get at deeper processes (e.g., 45 cm)
-  meanSoilVars_sub <- meanSoilVars %>% 
+  soil_means_sub <- soil_means %>% 
     filter((transect == "HW" & depth == 15 & pit %in% c(1, 3)) |
            (transect == "WW" & depth == 15 & pit %in% c(1, 6)))
 
   # Split those into separate dfs for Hungerford and Wade
     # and create columns for each variable, a version for each pit
-  meanSoilVars_sub_hford <- meanSoilVars_sub %>% filter(site == "Hungerford") %>% 
-    pivot_longer(cols = DO_mean_preEvent:VWC_mean_preEvent, names_to = "var", values_to = "value") %>% 
+  soil_means_sub_hford <- soil_means_sub %>% filter(site == "Hungerford") %>% 
+    pivot_longer(cols = DO_pre:VWC_pre, names_to = "var", values_to = "value") %>% 
     pivot_wider(names_from = c(var, pit), values_from = value) %>% 
     select(-c(transect, depth))
-  meanSoilVars_sub_wade <- meanSoilVars_sub %>% filter(site == "Wade") %>% 
-    pivot_longer(cols = DO_mean_preEvent:VWC_mean_preEvent, names_to = "var", values_to = "value") %>% 
+  soil_means_sub_wade <- soil_means_sub %>% filter(site == "Wade") %>% 
+    pivot_longer(cols = DO_pre:VWC_pre, names_to = "var", values_to = "value") %>% 
     pivot_wider(names_from = c(var, pit), values_from = value) %>% 
     select(-c(transect, depth))
   
   # Split the allvars into separate dfs for Hungerford and Wade & join the soil variables
   allvars_hford <- allvars %>% filter(site == "Hungerford") %>%
-    full_join(meanSoilVars_sub_hford, by = c("site", "event_start")) %>% 
+    full_join(soil_means_sub_hford, by = c("site", "event_start")) %>% 
     # Drop unnecessary columns
     select(-c(ends_with("well3")))
     # %>% na.omit  
   allvars_wade <- allvars %>% filter(site == "Wade") %>%
-    full_join(meanSoilVars_sub_wade, by = c("site", "event_start")) %>% 
+    full_join(soil_means_sub_wade, by = c("site", "event_start")) %>% 
     select(-c(ends_with("well5")))
     # %>% na.omit
+  
+# # Look at distributions
+#   allvars_hford %>% 
+#     pivot_longer(cols = -c(site:season, multipeak), names_to = "var", values_to = "value") %>% 
+#     ggplot(aes(value)) +
+#     facet_wrap(~var, scales = "free") +
+#     geom_histogram()
+  
+  # Checked on high turb_1d value for 2019-03-30 15:45:00	event and the turb timeseries for that time period looks OK
+  
+  # ysi %>% 
+  #   filter(site == "Hungerford") %>% 
+  #   filter(timestamp > ymd_hms("2019-03-20 15:45:00", tz = "Etc/GMT+4") & timestamp < ymd_hms("2019-04-10 15:45:00", tz = "Etc/GMT+4")) %>% 
+  #   ggplot(aes(x = timestamp, y = turb)) +
+  #   geom_point()
+  
+  # allvars_wade %>% 
+  #   pivot_longer(cols = -c(site:season, multipeak), names_to = "var", values_to = "value") %>% 
+  #   ggplot(aes(value)) +
+  #   facet_wrap(~var, scales = "free") +
+  #   geom_histogram()  
 
 # Write metrics to CSV ----
   allvars_hford %>% arrange(event_start) %>% mutate(event_start = as.character(event_start)) %>% write_csv("Data/eventMetrics_hford.csv")
