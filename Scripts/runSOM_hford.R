@@ -11,8 +11,8 @@
   source("Scripts/L2norm.R")
 
 # Create a new folder to save the plots and CSVs produced by the SOM code
-newFolder <- paste("Data/somResults/", Sys.Date(), sep = "")
-dir.create(newFolder)
+newFolder <- paste("Data/somResults/hford/", Sys.Date(), sep = "")
+dir.create(newFolder, recursive = TRUE)
   
 # Read in data ----
   # Calculated event metrics for each site as calculated in compile_calculate_allVars.R
