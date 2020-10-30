@@ -10,11 +10,10 @@
   # Calculated event metrics for each site as calculated in compile_calculate_allVars.R
   wade <- read_csv("Data/eventMetrics_wade.csv")
 
-
 # WADE ----  
   # PREPARE DATA ----
     # To begin, let's only use observations where there are no NAs
-    dat_wd <- wade %>% 
+    myData <- wade %>% 
       # Remove non-numerical columns
       select(-c(site, season, event_start)) %>% 
       # Remove response variables
