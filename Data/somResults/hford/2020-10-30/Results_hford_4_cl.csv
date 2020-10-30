@@ -1,0 +1,5 @@
+Run,DataSet,Nodes,Topol,rows,cols,normMeth,wghtMeth,niter,alphaCrs,alphaFin,Clusters,ColRowRat,Dist_mn,QE,npF,pVal_npF,blank
+1,hford,24,hexagonal,4,6,L2norm,noPCA,1000,0.05,0.01,4,1.5,0.406657452216492,0.406657,15.6454,0.01,0
+2,hford,28,hexagonal,4,7,L2norm,noPCA,1000,0.05,0.01,4,1.8,0.386048198715407,0.386048,18.418796,0.01,0
+3,hford,32,hexagonal,4,8,L2norm,noPCA,1000,0.05,0.01,4,2.0,0.297069023895846,0.297069,17.652935,0.01,0
+4,hford,36,hexagonal,4,9,L2norm,noPCA,1000,0.05,0.01,4,2.3,0.250219194202576,0.250219,16.993075,0.01,0
