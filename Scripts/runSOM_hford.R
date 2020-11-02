@@ -29,9 +29,7 @@ dir.create(newFolder, recursive = TRUE)
       # Keep the multipeak column for now, but code it as numerical
       mutate(multipeak = ifelse(multipeak == "NO", 0, 1)) %>% 
       # Keep only complete observations/rows (no NAs in any of the columns)
-      na.omit() %>% 
-      # Add a obs/row number
-      mutate(obs = row_number())
+      na.omit()
     # We're left with only 44 obs/rows of 76; but if we determine certain variables aren't useful for clustering
     # we can remove them and reiterate this process and may end up with more obs/rows
   
@@ -39,7 +37,9 @@ dir.create(newFolder, recursive = TRUE)
     myDataSet <- c("hford")  #identify data set version
     
     # Vector of observation number from original dataset
-    observ <- dplyr::pull(myData, obs)
+    observ <- myData %>% 
+      mutate(obs = row_number()) %>% 
+      dplyr::pull(obs)
   
   # SET UP THE GRID/LATTICE FOR THE SOM ----
   # Run this code once to determine which dimensions to input into the params_SOM . . .csv file that is saved as the 'params' object below
