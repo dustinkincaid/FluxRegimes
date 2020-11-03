@@ -6,6 +6,8 @@
   library("tidyverse") # general workhorse
   library("kohonen")   # to run the SOM
   library("vegan")     # to run adonis() for calc of nonparametric F test
+  # devtools::install_github("laresbernardo/lares")
+  library("lares")     # examine var correlations
 
   # Load the range normalization function written by Kristin Underwood
   source("Scripts/L2norm.R")
@@ -17,6 +19,39 @@ dir.create(newFolder, recursive = TRUE)
 # Read in data ----
   # Calculated event metrics for each site as calculated in compile_calculate_allVars.R
   hford <- read_csv("Data/eventMetrics_hford.csv")
+
+# Look at correlations between variables
+hford %>% 
+  # Remove non-numerical columns
+  select(-c(site, season, event_start, multipeak)) %>%
+  # Remove response variables
+  select(-c(NO3_kg_km2, SRP_kg_km2, event_NO3_SRP, turb_kg_km2)) %>%  
+  # Keep only complete observations/rows (no NAs in any of the columns)
+  na.omit() %>% 
+  lares::corr_cross(max_pvalue = 0.10, top = 20)
+
+# Look at plots of correlated variables
+hford %>% 
+  ggplot(aes(x = SoilTemp_pre_1, y = SoilTemp_pre_3, color = season)) +
+  geom_point(shape = 1) +
+  geom_abline(slope = 1) +
+  theme_classic()
+
+# Decisions
+  # gw_1d and gw_7d for well5 highly correlated (98.5%); remove gw_7d
+
+# Look at correlations again without dropped variables
+hford %>% 
+  # Remove non-numerical columns
+  select(-c(site, season, event_start, multipeak)) %>%
+  # Remove response variables
+  select(-c(NO3_kg_km2, SRP_kg_km2, event_NO3_SRP, turb_kg_km2)) %>%  
+  # Drop these highly correlated variables
+  select(-c(gw_7d_well5)) %>% 
+  # Keep only complete observations/rows (no NAs in any of the columns)
+  na.omit() %>% 
+  lares::corr_cross(max_pvalue = 0.10, top = 20)
+  
 
 # HUNGERFORD ----  
   # PREPARE DATA ----
