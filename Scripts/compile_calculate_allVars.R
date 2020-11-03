@@ -8,8 +8,6 @@
 # TO DO:
   # Calculate soil moisture deficit (need estimated actual ET)
   # Look into where rain_start from data (first rain obs for each event; see rain intensity mean calc below) differs from the rain_start we recorded during event delineations
-  # Calculate antecedent precipitation rain index
-  # Maybe update catchment areas in the event nutrient yield calculations to reflect new GIS data from Ravindra
   # Currently using k = 0.95 for API calc; need to figure out if this is OK for this region
   
 
@@ -1118,10 +1116,12 @@
   # Split those into separate dfs for Hungerford and Wade
     # and create columns for each variable, a version for each pit
   soil_means_sub_hford <- soil_means_sub %>% filter(site == "Hungerford") %>% 
+    mutate(pit = paste0("pit", pit)) %>% 
     pivot_longer(cols = DO_pre:VWC_pre, names_to = "var", values_to = "value") %>% 
     pivot_wider(names_from = c(var, pit), values_from = value) %>% 
     select(-c(transect, depth))
   soil_means_sub_wade <- soil_means_sub %>% filter(site == "Wade") %>% 
+    mutate(pit = paste0("pit", pit)) %>% 
     pivot_longer(cols = DO_pre:VWC_pre, names_to = "var", values_to = "value") %>% 
     pivot_wider(names_from = c(var, pit), values_from = value) %>% 
     select(-c(transect, depth))
