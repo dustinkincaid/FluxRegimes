@@ -606,7 +606,7 @@
     rm(met_all2, met_all3)
       
     
-  # Total rain for 1-day, 7-days, 14-days, and 30-days prior to event (prior to rain start)
+  # Total rain for 1-4days, 7-days, 14-days, and 30-days prior to event (prior to rain start)
   # Only considering events with a rain_start, so we'll use events_withRain df from above
     # Join rain_start to the met_all data
     events_withRain[, timestamp := rain_start]
@@ -684,7 +684,7 @@
       # Could regress log(soil water content) against time to estimate k maybe?
       k = 0.95
       
-    # First, calculate the amount of received each day (24 hrs) prior to the event for 4 days
+    # First, calculate the amount of rain received each day (24 hrs) prior to the event for 4 days
     # 288 rows 5 min/row = 1 day, so 288 rows/day
     rain_API <- setDT(comb_met)[, c("rain_day1", "rain_day2", "rain_day3", "rain_day4") 
                       := list(frollsum(lag(precip_mm, n = 1+288*0), n = 288, align = "right", fill = NA, na.rm = T),
@@ -708,17 +708,17 @@
 # Calculate MET metrics ----
  # 1-day and 3-day means  
   # 288 rows 5 min/row = 1 day, so 288 rows/day
-  airT_means <- setDT(comb_met)[, c("airT_1d", "airT_3d") 
+  airT_means <- setDT(comb_met)[, c("airT_1d", "airT_4d") 
                     := list(frollmean(lag(temp_C, n = 1), n = 288*1, align = "right", fill = NA, na.rm = T),
-                            frollmean(lag(temp_C, n = 1), n = 288*3, align = "right", fill = NA, na.rm = T)),
+                            frollmean(lag(temp_C, n = 1), n = 288*4, align = "right", fill = NA, na.rm = T)),
                             by = site][!is.na(event_start)][, c("site", "event_start", "airT_1d", "airT_3d")]
-  solarRad_means <- setDT(comb_met)[, c("solarRad_1d", "solarRad_3d") 
+  solarRad_means <- setDT(comb_met)[, c("solarRad_1d", "solarRad_4d") 
                     := list(frollmean(lag(solarRad_wm2, n = 1), n = 288*1, align = "right", fill = NA, na.rm = T),
-                            frollmean(lag(solarRad_wm2, n = 1), n = 288*3, align = "right", fill = NA, na.rm = T)),
+                            frollmean(lag(solarRad_wm2, n = 1), n = 288*4, align = "right", fill = NA, na.rm = T)),
                             by = site][!is.na(event_start)][, c("site", "event_start", "solarRad_1d", "solarRad_3d")]
-  dewPoint_means <- setDT(comb_met)[, c("dewPoint_1d", "dewPoint_3d") 
+  dewPoint_means <- setDT(comb_met)[, c("dewPoint_1d", "dewPoint_4d") 
                     := list(frollmean(lag(dewPoint, n = 1), n = 288*1, align = "right", fill = NA, na.rm = T),
-                            frollmean(lag(dewPoint, n = 1), n = 288*3, align = "right", fill = NA, na.rm = T)),
+                            frollmean(lag(dewPoint, n = 1), n = 288*4, align = "right", fill = NA, na.rm = T)),
                             by = site][!is.na(event_start)][, c("site", "event_start", "dewPoint_1d", "dewPoint_3d")]
   # Join these
   met_mets <- full_join(airT_means, solarRad_means, by = c("site", "event_start")) %>% 
@@ -842,12 +842,12 @@
     arrange(transect, pit, depth, timestamp) %>% 
     group_by(year, transect, pit, depth) %>% 
     # Here I calculate the width of the window used for the variable mean (the window always excludes the time of the event start time)
-    # If the time b/w events is >= 5, then we calculate the 5-day mean (5 * 96 15-min rows = 480)
-    # If the time b/w events is >= 1 & < 5, then we calculate the X-day mean (X * 96 15-min rows; e.g., for 2-days = 2*96 = 192)
+    # If the time b/w events is >= 4, then we calculate the 4-day mean (4 * 96 15-min rows)
+    # If the time b/w events is >= 1 & < 4, then we calculate the X-day mean (X * 96 15-min rows; e.g., for 2-days = 2*96 = 192)
     # If the time b/w events is < 1, then we calculate the 1-hr mean (4 rows)
-    # If the time b/w events is NA (i.e., the observed event each year), then we calculate the 0.5-day mean
-    mutate(widthValue = ifelse(round(time_sinceLastEvent) >= 5, 5*96,
-                                    ifelse(round(time_sinceLastEvent) >= 1 & round(time_sinceLastEvent) < 5, round(time_sinceLastEvent)*96, 4)),
+    # If the time b/w events is NA (i.e., the first observed event each year), then we calculate the 0.5-day mean
+    mutate(widthValue = ifelse(round(time_sinceLastEvent) >= 4, 4*96,
+                                    ifelse(round(time_sinceLastEvent) >= 1 & round(time_sinceLastEvent) < 4, round(time_sinceLastEvent)*96, 4)),
            widthValue = replace(widthValue, is.na(widthValue), 48)) %>%     
     mutate_at(vars(c(DO, Redox, SoilTemp, VWC)),
               .funs = list("pre" = ~ ifelse(!is.na(event_start), rollapply(data = lag(., n = 1),
@@ -1041,7 +1041,7 @@
     # test <- gw_all %>% filter(event_start == ymd_hms("2017-08-05 09:15:00", tz = "Etc/GMT+4"))
     # test <- gw_all %>% filter(site == "Wade" & timestamp > ymd_hms("2017-08-03 00:00:00", tz = "Etc/GMT+4"))
       
-  # Mean antecedent discharge - 1 & 7 days
+  # Mean antecedent discharge - 1 & 4 days
     # Join event_start to the gw_all data
       events_all[, timestamp := event_start]
       setkey(gw_all, site, timestamp)
@@ -1056,20 +1056,20 @@
       arrange(site, well, timestamp)
     
     # 1440 min/day / 15-min/row = 96 rows/day
-    gw_preEvent_means <- setDT(comb_gw_long)[, c("gw_1d", "gw_7d") 
+    gw_preEvent_means <- setDT(comb_gw_long)[, c("gw_1d", "gw_4d") 
                       := list(frollmean(lag(depth_m, n = 1), n = 96*1, align = "right", fill = NA, na.rm = T),
-                              frollmean(lag(depth_m, n = 1), n = 96*7, align = "right", fill = NA, na.rm = T)),
-                              by = list(site, year, well)][!is.na(event_start)][, c("site", "well", "event_start", "gw_1d", "gw_7d")]
+                              frollmean(lag(depth_m, n = 1), n = 96*4, align = "right", fill = NA, na.rm = T)),
+                              by = list(site, year, well)][!is.na(event_start)][, c("site", "well", "event_start", "gw_1d", "gw_4d")]
     
     # test2 <- gw_preEvent_means %>% filter(site == "Hungerford" & well == "well1" & timestamp >= ymd_hms("2019-04-05 00:00:00", tz = "Etc/GMT+4"))
     # test3 <- gw_all %>% filter(site == "Hungerford" & timestamp >= ymd_hms("2019-04-05 00:00:00", tz = "Etc/GMT+4"))
     
     gw_preEvent_means <- gw_preEvent_means %>% 
-      pivot_wider(names_from = well, values_from = c(gw_1d, gw_7d)) %>% 
+      pivot_wider(names_from = well, values_from = c(gw_1d, gw_4d)) %>% 
       # Choose which wells you want to keep
       select(site, event_start, matches("(3|5)$"))
     
-    rm(comb_gw, comb_gw_long, gw_all, event)
+    rm(comb_gw, comb_gw_long, gw_all)
     
   # Play sound when done!
   beep(sound = "fanfare") 
