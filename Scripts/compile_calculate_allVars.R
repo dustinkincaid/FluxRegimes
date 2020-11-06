@@ -1114,8 +1114,8 @@
   #          (transect == "WW" & depth == 15 & pit %in% c(1, 6)))
   # Because GW level data is limited to 2018-2019, let's also look at 45 cm (esp. VWC)
   soil_means_sub <- soil_means %>% 
-    filter((transect == "HW" & depth %in% c(15, 45) & pit %in% c(1, 3)) |
-           (transect == "WW" & depth %in% c(15, 45) & pit %in% c(1, 6)))  
+    filter((transect == "HW" & depth %in% c(15, 30, 45) & pit %in% c(1, 3)) |
+           (transect == "WW" & depth %in% c(15, 30, 45) & pit %in% c(1, 6)))  
 
   # Split those into separate dfs for Hungerford and Wade
     # and create columns for each variable, a version for each pit
