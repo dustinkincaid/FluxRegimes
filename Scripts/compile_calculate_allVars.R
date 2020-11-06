@@ -619,7 +619,7 @@
     
     # Calculate cumulative pre-event rain totals
     # 288 rows 5 min/row = 1 day, so 288 rows/day
-    rain_preEvent_totals <- setDT(comb_met)[, c("rain_preEvent_1d", "rain_preEvent_2d", "rain_preEvent_3d", "rain_preEvent_4d", "rain_preEvent_7d", "rain_preEvent_14d", "rain_preEvent_30d") 
+    rain_preEvent_totals <- setDT(comb_met)[, c("rain_1d", "rain_2d", "rain_3d", "rain_4d", "rain_7d", "rain_14d", "rain_30d") 
                       := list(frollsum(lag(precip_mm, n = 1), n = 288*1, align = "right", fill = NA, na.rm = T),
                               frollsum(lag(precip_mm, n = 1), n = 288*2, align = "right", fill = NA, na.rm = T),
                               frollsum(lag(precip_mm, n = 1), n = 288*3, align = "right", fill = NA, na.rm = T),
@@ -627,7 +627,7 @@
                               frollsum(lag(precip_mm, n = 1), n = 288*7, align = "right", fill = NA, na.rm = T),
                               frollsum(lag(precip_mm, n = 1), n = 288*14, align = "right", fill = NA, na.rm = T),
                               frollsum(lag(precip_mm, n = 1), n = 288*30, align = "right", fill = NA, na.rm = T)),
-                              by = site][!is.na(rain_start)][, c("site", "event_start", "rain_preEvent_1d", "rain_preEvent_2d", "rain_preEvent_3d", "rain_preEvent_4d", "rain_preEvent_7d", "rain_preEvent_14d", "rain_preEvent_30d")]
+                              by = site][!is.na(rain_start)][, c("site", "event_start", "rain_1d", "rain_2d", "rain_3d", "rain_4d", "rain_7d", "rain_14d", "rain_30d")]
     
     # Slower alternative method
     # rain_preEvent_totals <- comb_met %>%
@@ -1109,22 +1109,28 @@
   
   # Let's do 15 cm only at HW 1 & 3 and WW 1 & 6
   # Choosing 15 cm only here b/c we have GW level data to get at deeper processes (e.g., 45 cm)
+  # soil_means_sub <- soil_means %>% 
+  #   filter((transect == "HW" & depth == 15 & pit %in% c(1, 3)) |
+  #          (transect == "WW" & depth == 15 & pit %in% c(1, 6)))
+  # Because GW level data is limited to 2018-2019, let's also look at 45 cm (esp. VWC)
   soil_means_sub <- soil_means %>% 
-    filter((transect == "HW" & depth == 15 & pit %in% c(1, 3)) |
-           (transect == "WW" & depth == 15 & pit %in% c(1, 6)))
+    filter((transect == "HW" & depth %in% c(15, 45) & pit %in% c(1, 3)) |
+           (transect == "WW" & depth %in% c(15, 45) & pit %in% c(1, 6)))  
 
   # Split those into separate dfs for Hungerford and Wade
     # and create columns for each variable, a version for each pit
   soil_means_sub_hford <- soil_means_sub %>% filter(site == "Hungerford") %>% 
     mutate(pit = paste0("pit", pit)) %>% 
+    mutate(depth = paste0(depth, "cm")) %>% 
     pivot_longer(cols = DO_pre:VWC_pre, names_to = "var", values_to = "value") %>% 
-    pivot_wider(names_from = c(var, pit), values_from = value) %>% 
-    select(-c(transect, depth))
+    pivot_wider(names_from = c(var, pit, depth), values_from = value) %>% 
+    select(-c(transect))
   soil_means_sub_wade <- soil_means_sub %>% filter(site == "Wade") %>% 
     mutate(pit = paste0("pit", pit)) %>% 
+    mutate(depth = paste0(depth, "cm")) %>% 
     pivot_longer(cols = DO_pre:VWC_pre, names_to = "var", values_to = "value") %>% 
-    pivot_wider(names_from = c(var, pit), values_from = value) %>% 
-    select(-c(transect, depth))
+    pivot_wider(names_from = c(var, pit, depth), values_from = value) %>% 
+    select(-c(transect))
   
   # Split the allvars into separate dfs for Hungerford and Wade & join the soil variables
   allvars_hford <- allvars %>% filter(site == "Hungerford") %>%
