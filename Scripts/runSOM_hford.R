@@ -28,17 +28,20 @@ hford %>%
   select(-c(NO3_kg_km2, SRP_kg_km2, event_NO3_SRP, turb_kg_km2)) %>%  
   # Keep only complete observations/rows (no NAs in any of the columns)
   na.omit() %>% 
+  # Visualize these
   lares::corr_cross(max_pvalue = 0.10, top = 20)
 
 # Look at plots of correlated variables
 hford %>% 
-  ggplot(aes(x = SoilTemp_pre_1, y = SoilTemp_pre_3, color = season)) +
+  ggplot(aes(x = gw_4d_well5, y = VWC_pre_pit3, color = season)) +
   geom_point(shape = 1) +
   geom_abline(slope = 1) +
   theme_classic()
 
 # Decisions
-  # gw_1d and gw_7d for well5 highly correlated (98.5%); remove gw_7d
+  # If the 1-d and 4-d values for a variable are highly correlated, use the 4-d value
+  # gw_1d and gw_4d for well5 highly correlated (99.3%); remove gw_1d
+  # gw_4d and VWC_pre_pit3 are highly correlated (93%)
 
 # Look at correlations again without dropped variables
 hford %>% 
@@ -47,7 +50,7 @@ hford %>%
   # Remove response variables
   select(-c(NO3_kg_km2, SRP_kg_km2, event_NO3_SRP, turb_kg_km2)) %>%  
   # Drop these highly correlated variables
-  select(-c(gw_7d_well5)) %>% 
+  select(-c(gw_1d_well5)) %>% 
   # Keep only complete observations/rows (no NAs in any of the columns)
   na.omit() %>% 
   lares::corr_cross(max_pvalue = 0.10, top = 20)
