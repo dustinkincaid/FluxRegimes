@@ -8,6 +8,7 @@
   library("vegan")     # to run adonis() for calc of nonparametric F test
   # devtools::install_github("laresbernardo/lares")
   library("lares")     # examine var correlations
+  library("ggforce")   # for facet plots on multiple pages
 
   # Load the range normalization function written by Kristin Underwood
   source("Scripts/L2norm.R")
@@ -541,7 +542,7 @@ datWithCluster <- clustAssignmDF %>%
   # Parse columns into correct type
   type_convert() %>% 
   # Select the correct lattice config you want to extract
-  filter(rows == 5 & cols == 8) %>% 
+  filter(rows == 6 & cols == 6) %>% 
   # Pivot to longer format
   pivot_longer(cols = obs1:ncol(.), names_to = "obs", values_to = "cluster") %>% 
   select(cluster) %>% 
@@ -568,11 +569,30 @@ datWithCluster <- clustAssignmDF %>%
   # Arrange columns
   select(site:ncol(.), everything())
 
+
 # Selecting vars to keep Step 2 ----
 # Plot independent variables separated by cluster
-datWithCluster %>% 
-  pivot_longer(cols = DOY:ncol(.), names_to = "var", values_to = "value") %>% 
-  ggplot(aes(x = cluster, y = value, group = cluster)) +
-  facet_wrap(~var, ncol = 3, scales = "free_y") +
-  geom_boxplot() +
-  theme_bw()
+
+  # Number of plots
+  df <- datWithCluster %>% 
+    pivot_longer(cols = DOY:ncol(.), names_to = "var", values_to = "value")
+  length(unique(df$var))
+
+  # Plot
+  pdf(paste0(newFolder, "/", "boxplots_varsByCluster.pdf"),
+      width = 7.5, height = 10)
+  for(i in 1:2){
+    print(datWithCluster %>% 
+      pivot_longer(cols = DOY:ncol(.), names_to = "var", values_to = "value") %>% 
+      ggplot(aes(x = cluster, y = value, group = cluster)) +
+      facet_wrap_paginate(~var, scales = "free_y", ncol = 4, nrow = 3, page = i) +
+      geom_boxplot(fill = "white") +
+      geom_point(position=position_jitter(width=0.2), shape=1, size=1, color="gray50", alpha=0.6) +
+      theme_bw() +
+      theme(panel.grid = element_blank(),
+            strip.text = element_text(size = 7),
+            panel.spacing.x = unit(0.3, "inches"),
+            panel.spacing.y = unit(0.45, "inches")))
+  }
+  dev.off()
+  
