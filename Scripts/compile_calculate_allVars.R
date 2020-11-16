@@ -1032,7 +1032,7 @@
       mutate(gw_event_max = ifelse(!is.finite(gw_event_max), NA, gw_event_max)) %>% 
       pivot_wider(names_from = well, values_from = c(gw_event_max, gw_event_delta)) %>% 
       # Choose which wells you want to keep
-      select(site, event_start, matches("(3|5)$"))
+      select(site, event_start, matches("(1|3|5)$"))
       
     rm(gw_all2)
     
@@ -1065,7 +1065,7 @@
     gw_preEvent_means <- gw_preEvent_means %>% 
       pivot_wider(names_from = well, values_from = c(gw_1d, gw_4d)) %>% 
       # Choose which wells you want to keep
-      select(site, event_start, matches("(3|5)$"))
+      select(site, event_start, matches("(1|3|5)$"))
     
     rm(comb_gw, comb_gw_long, gw_all)
     
@@ -1139,8 +1139,7 @@
     select(-c(ends_with("well3")))
     # %>% na.omit  
   allvars_wade <- allvars %>% filter(site == "Wade") %>%
-    full_join(soil_means_sub_wade, by = c("site", "event_start")) %>% 
-    select(-c(ends_with("well5")))
+    full_join(soil_means_sub_wade, by = c("site", "event_start"))
     # %>% na.omit
   
 # # Look at distributions
