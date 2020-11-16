@@ -19,15 +19,22 @@ dir.create(newFolder, recursive = TRUE)
   
 # Read in data ----
   # Calculated event metrics for each site as calculated in compile_calculate_allVars.R
-  hford <- read_csv("Data/eventMetrics_hford.csv")
+  hford <- read_csv("Data/eventMetrics_hford.csv") %>% 
+    # Code the multipeak col as numerical
+    mutate(multipeak = ifelse(multipeak == "NO", 0, 1))
+
+# List the variables that will not be used in the analysis (e.g., response/dependent & ID/INFO)
+drop.info <- names(hford %>% 
+                     select(# Remove the non-numerical ID/INFO
+                            site, season, event_start,
+                            # Remove response variables
+                            NO3_kg_km2, SRP_kg_km2, event_NO3_SRP, turb_kg_km2))
 
 # Select vars to keep Step 1 ----
 # Look at correlations between variables
 hford %>% 
-  # Remove non-numerical columns
-  select(-c(site, season, event_start, multipeak)) %>%
-  # Remove response variables
-  select(-c(NO3_kg_km2, SRP_kg_km2, event_NO3_SRP, turb_kg_km2)) %>%  
+  # Remove the vars listed above
+  select(-one_of(drop.info)) %>% 
   # Remove all 30cm & 45cm soil variables except VWC
   select(-c(DO_pre_pit1_30cm, Redox_pre_pit1_30cm, SoilTemp_pre_pit1_30cm,
             DO_pre_pit3_30cm, Redox_pre_pit3_30cm, SoilTemp_pre_pit3_30cm,
@@ -84,62 +91,45 @@ hford %>%
     # Drop all the rain_Xd vars, b/c API_4d should cover this, though would be interesting to test how many days pre-event (e.g., 4 days for API) matters
   
   
-
 # Look at correlations again without dropped variables
-hford %>% 
-  # Remove non-numerical columns
-  select(-c(site, season, event_start, multipeak)) %>%
-  # Remove response variables
-  select(-c(NO3_kg_km2, SRP_kg_km2, event_NO3_SRP, turb_kg_km2)) %>%  
-  # Remove all 30cm & 45cm soil variables except VWC
-  select(-c(DO_pre_pit1_30cm, Redox_pre_pit1_30cm, SoilTemp_pre_pit1_30cm,
-            DO_pre_pit3_30cm, Redox_pre_pit3_30cm, SoilTemp_pre_pit3_30cm,
-            DO_pre_pit1_45cm, Redox_pre_pit1_45cm, SoilTemp_pre_pit1_45cm,
-            DO_pre_pit3_45cm, Redox_pre_pit3_45cm, SoilTemp_pre_pit3_45cm)) %>%   
-  # Drop these highly correlated variables
-  select(-c(gw_1d_well5,
-            VWC_pre_pit1_15cm, VWC_pre_pit1_30cm, VWC_pre_pit1_45cm, 
-            VWC_pre_pit3_30cm, VWC_pre_pit3_45cm,
-            contains("gw"),
-            SoilTemp_pre_pit1_15cm,
-            # q_event_delta,
-            q_1d,
-            # rain_event_total_mm,
-            q_event_dQRate_cmsPerHr,
-            rain_1d:rain_30d)) %>% 
-  # Keep only complete observations/rows (no NAs in any of the columns)
-  na.omit() %>% 
-  lares::corr_cross(max_pvalue = 0.10, top = 20)
+  # List the additional dropped variables
+  drop.vars <- names(hford %>% 
+                       select(# Remove all 30cm & 45cm soil variables except VWC
+                              DO_pre_pit1_30cm, Redox_pre_pit1_30cm, SoilTemp_pre_pit1_30cm,
+                              DO_pre_pit3_30cm, Redox_pre_pit3_30cm, SoilTemp_pre_pit3_30cm,
+                              DO_pre_pit1_45cm, Redox_pre_pit1_45cm, SoilTemp_pre_pit1_45cm,
+                              DO_pre_pit3_45cm, Redox_pre_pit3_45cm, SoilTemp_pre_pit3_45cm,
+                              # Drop these highly correlated variables
+                              gw_1d_well5,
+                              VWC_pre_pit1_15cm, VWC_pre_pit1_30cm, VWC_pre_pit1_45cm, 
+                              VWC_pre_pit3_30cm, VWC_pre_pit3_45cm,
+                              contains("gw"),
+                              SoilTemp_pre_pit1_15cm,
+                              # q_event_delta,
+                              q_1d,
+                              # rain_event_total_mm,
+                              q_event_dQRate_cmsPerHr,
+                              rain_1d:rain_30d))
+
+  # Create df w/ dropped variables
+  hford_drop <- hford %>% 
+    # Drop variables
+    select(-one_of(drop.info, drop.vars))
+
+  # Look at correlations again without dropped variables
+  hford_drop %>% 
+    # Keep only complete observations/rows (no NAs in any of the columns)
+    na.omit() %>% 
+    lares::corr_cross(max_pvalue = 0.10, top = 20)
   
 
 # SOM ----  
   # PREPARE DATA ----
     # To begin, let's only use observations where there are no NAs
-    myData <- hford %>% 
-      # Remove non-numerical columns
-      select(-c(site, season, event_start)) %>% 
-      # Remove response variables
-      select(-c(NO3_kg_km2, SRP_kg_km2, event_NO3_SRP, turb_kg_km2)) %>% 
-      # Keep the multipeak column for now, but code it as numerical
-      mutate(multipeak = ifelse(multipeak == "NO", 0, 1)) %>% 
-      # Remove all 30cm & 45cm soil variables except VWC
-      select(-c(DO_pre_pit1_30cm, Redox_pre_pit1_30cm, SoilTemp_pre_pit1_30cm,
-                DO_pre_pit3_30cm, Redox_pre_pit3_30cm, SoilTemp_pre_pit3_30cm,
-                DO_pre_pit1_45cm, Redox_pre_pit1_45cm, SoilTemp_pre_pit1_45cm,
-                DO_pre_pit3_45cm, Redox_pre_pit3_45cm, SoilTemp_pre_pit3_45cm)) %>%   
-      # Drop these highly correlated variables
-      select(-c(gw_1d_well5,
-                VWC_pre_pit1_15cm, VWC_pre_pit1_30cm, VWC_pre_pit1_45cm, 
-                VWC_pre_pit3_30cm, VWC_pre_pit3_45cm,
-                contains("gw"),
-                SoilTemp_pre_pit1_15cm,
-                # q_event_delta,
-                q_1d,
-                # rain_event_total_mm,
-                q_event_dQRate_cmsPerHr,
-                rain_1d:rain_30d)) %>%   
+    myData <- hford_drop %>% 
       # Keep only complete observations/rows (no NAs in any of the columns)
       na.omit()
+
     # We're left with only 44 obs/rows of 76; but if we determine certain variables aren't useful for clustering
     # we can remove them and reiterate this process and may end up with more obs/rows
   
@@ -533,9 +523,6 @@ clustAssignm <- cbind (Results, clustAssignm)
 clustAssignmDF <- as_tibble(clustAssignm)
 write_csv(clustAssignmDF, paste0(newFolder,"/","ClustAssign_",myDataSet,"_",nclusters,"_cl",".csv"))
 
-finished <- 'finished'
-print(finished)
-
 
 # Create DF with event IDs and cluster numbers ----
 datWithCluster <- clustAssignmDF %>% 
@@ -549,30 +536,16 @@ datWithCluster <- clustAssignmDF %>%
   # Bind cluster ID to myData
   bind_cols(myData) %>% 
   # Join to original data to get event IDs
-  left_join(hford %>% mutate(multipeak = ifelse(multipeak == "NO", 0, 1))) %>% 
-  # Drop all the independent variables you didn't use in the SOM (copy from myData above)
-  # Remove all 30cm & 45cm soil variables except VWC
-  select(-c(DO_pre_pit1_30cm, Redox_pre_pit1_30cm, SoilTemp_pre_pit1_30cm,
-            DO_pre_pit3_30cm, Redox_pre_pit3_30cm, SoilTemp_pre_pit3_30cm,
-            DO_pre_pit1_45cm, Redox_pre_pit1_45cm, SoilTemp_pre_pit1_45cm,
-            DO_pre_pit3_45cm, Redox_pre_pit3_45cm, SoilTemp_pre_pit3_45cm,
-            gw_1d_well5,
-            VWC_pre_pit1_15cm, VWC_pre_pit1_30cm, VWC_pre_pit1_45cm, 
-            VWC_pre_pit3_30cm, VWC_pre_pit3_45cm,
-            contains("gw"),
-            SoilTemp_pre_pit1_15cm,
-            # q_event_delta,
-            q_1d,
-            # rain_event_total_mm,
-            q_event_dQRate_cmsPerHr,
-            rain_1d:rain_30d)) %>% 
+  left_join(hford) %>% 
+  # Drop all the independent variables you didn't use in the SOM (copy from myData above); 
+  # but KEEP the INFO vars
+  select(-one_of(drop.vars)) %>% 
   # Arrange columns
   select(site:ncol(.), everything())
 
 
 # Selecting vars to keep Step 2 ----
 # Plot independent variables separated by cluster
-
   # Number of plots
   df <- datWithCluster %>% 
     pivot_longer(cols = DOY:ncol(.), names_to = "var", values_to = "value")
