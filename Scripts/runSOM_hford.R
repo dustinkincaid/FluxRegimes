@@ -40,6 +40,8 @@ hford %>%
             DO_pre_pit3_30cm, Redox_pre_pit3_30cm, SoilTemp_pre_pit3_30cm,
             DO_pre_pit1_45cm, Redox_pre_pit1_45cm, SoilTemp_pre_pit1_45cm,
             DO_pre_pit3_45cm, Redox_pre_pit3_45cm, SoilTemp_pre_pit3_45cm)) %>%
+  # Keep only gw well 5 for now
+  select(-c(ends_with("well1"))) %>% 
   # Keep only complete observations/rows (no NAs in any of the columns)
   na.omit() %>% 
   # Visualize these
@@ -58,7 +60,7 @@ hford %>%
   # Other correlations
   # scatter plot comparison
   hford %>% 
-    ggplot(aes(x = DO_pre_pit1_15cm, y = DO_pre_pit3_15cm)) +
+    ggplot(aes(x = gw_4d_well1, y = gw_4d_well5)) +
     geom_point(shape = 1) +
     geom_abline(slope = 1) +
     geom_smooth(method = "lm") +
@@ -99,6 +101,8 @@ hford %>%
                               DO_pre_pit3_30cm, Redox_pre_pit3_30cm, SoilTemp_pre_pit3_30cm,
                               DO_pre_pit1_45cm, Redox_pre_pit1_45cm, SoilTemp_pre_pit1_45cm,
                               DO_pre_pit3_45cm, Redox_pre_pit3_45cm, SoilTemp_pre_pit3_45cm,
+                              # Keep only gw well 5 for now
+                              ends_with("well1"),
                               # Drop these highly correlated variables
                               gw_1d_well5,
                               VWC_pre_pit1_15cm, VWC_pre_pit1_30cm, VWC_pre_pit1_45cm, 
