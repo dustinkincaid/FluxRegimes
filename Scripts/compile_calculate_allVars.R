@@ -1209,15 +1209,11 @@
   
 
 # Split the allvars into separate dfs for Hungerford and Wade & join the soil variables
-allvars_hford <- allvars %>% filter(site == "Hungerford") %>%
-  full_join(soil_means_sub_hford, by = c("site", "event_start")) %>% 
-  full_join(soil_means_agg %>% filter(site == "Hungerford"), by = c("site", "event_start"))
+allvars_hford <- allvars %>% filter(site == "Hungerford") %>% 
   # Drop unnecessary columns
-  select(-c(ends_with("well3")))
-  # %>% na.omit  
-allvars_wade <- allvars %>% filter(site == "Wade") %>%
-  full_join(soil_means_sub_wade, by = c("site", "event_start")) %>% 
-  full_join(soil_means_agg %>% filter(site == "Wade"), by = c("site", "event_start"))
+  select(-c(ends_with(c("well2", "well4a")), contains(c("WW"))))
+allvars_wade <- allvars %>% filter(site == "Wade") %>% 
+  select(-c(ends_with("well7"), contains(c("HW"))))
   
 # # Look at distributions
 #   allvars_hford %>% 
