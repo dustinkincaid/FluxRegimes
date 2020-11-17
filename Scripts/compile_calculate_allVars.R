@@ -1032,7 +1032,7 @@
       mutate(gw_event_max = ifelse(!is.finite(gw_event_max), NA, gw_event_max)) %>% 
       pivot_wider(names_from = well, values_from = c(gw_event_max, gw_event_delta)) %>% 
       # Choose which wells you want to keep
-      select(site, event_start, matches("(1|3|5)$"))
+      select(site, event_start, matches("(1|2|3|4a|5|7)$"))
       
     rm(gw_all2)
     
@@ -1065,7 +1065,7 @@
     gw_preEvent_means <- gw_preEvent_means %>% 
       pivot_wider(names_from = well, values_from = c(gw_1d, gw_4d)) %>% 
       # Choose which wells you want to keep
-      select(site, event_start, matches("(1|3|5)$"))
+      select(site, event_start, matches("(1|2|3|4a|5|7)$"))
     
     rm(comb_gw, comb_gw_long, gw_all)
     
@@ -1075,8 +1075,89 @@
 
 # ----    
 
-# Join all variables together - don't forget PET ----
-  # STILL NEED TO INCLUDE TIME SINCE LAST EVENT!
+# Decide on which soil variables and do some additonal calcs for soil & gw metrics ----  
+# Which soil vars to add?
+  # Look at which transects, pits and depths we have
+  whichSoil <- soil_means %>% 
+    select(transect, pit, depth) %>% 
+    distinct()
+  
+  # We'll choose these
+  soil_means_sub <- soil_means %>% 
+    filter((transect == "HW" & depth %in% c(15, 30, 45) & pit %in% c(1, 2, 3, 5)) |
+           (transect == "WD" & depth %in% c(15, 30, 45) & pit %in% c(1, 3, 4)) |
+           (transect == "WW" & depth %in% c(15, 30, 45) & pit %in% c(1, 6, 8)))
+  
+  # Create a column for each variable, pit, depth combo
+  soil_means_sub2 <- soil_means_sub %>% 
+    filter(transect == "HW" | transect == "WW") %>% 
+    mutate(pit = paste0(transect, "p", pit)) %>% 
+    mutate(depth = paste0(depth, "cm")) %>% 
+    pivot_longer(cols = DO_pre:VWC_pre, names_to = "var", values_to = "value") %>% 
+    pivot_wider(names_from = c(var, pit, depth), values_from = value) %>% 
+    select(-c(transect))
+
+  # But we're also going to average the soil metrics across multiple sites to obtain a "wet" and "dry" value
+  # To do this we'll range normalize the mean soil values (scale between 0 and 1)
+  soil_means_agg <- soil_means_sub %>% 
+    # Create transect_pit ID
+    mutate(trans_pit = paste(transect, pit, sep = "_")) %>% 
+    # Categorize trans_pits as representing a wetter lowland area (wet) or drier upland area (dry)
+    mutate(location = ifelse(trans_pit %in% c("HW_1", "WD_1", "WD_3", "WD_4", "WW_1"), "dry",
+                             ifelse(trans_pit %in% c("HW_2", "HW_3", "HW_5", "WW_6", "WW_8"), "wet", NA))) %>% 
+    # Range normalize the values for each transect_pit_depth combo
+    # Create transect_pit_depth ID
+    mutate(trans_pit_depth = paste(transect, pit, depth, sep = "_")) %>% 
+    group_by(trans_pit_depth) %>% 
+    mutate_at(vars(c(DO_pre, Redox_pre, SoilTemp_pre, VWC_pre)),
+          # .funs = list(~ (. - mean(., na.rm = T)) / sd(., na.rm = T))) %>% 
+          .funs = list(~ (. - min(., na.rm = T)) / (max(., na.rm = T) - min(., na.rm = T)))) %>%
+    ungroup() %>% 
+    # Calculate the mean range-normalized value for dry vs. wet locations at each site
+    pivot_longer(cols = DO_pre:VWC_pre, names_to = "var", values_to = "value") %>% 
+    group_by(site, location, event_start, var, depth) %>% 
+    summarize(mean = mean(value, na.rm = T)) %>% 
+    mutate(depth = paste0(depth, "cm")) %>% 
+    pivot_wider(names_from = c(var, location, depth), values_from = mean)
+  
+
+  # Split the soil metrics by pit into separate dfs for Hungerford and Wade
+    # and create columns for each variable, a version for each pit
+  # Keep only HW pits for HW
+  # soil_means_sub_hford <- soil_means_sub %>% filter(site == "Hungerford" & transect == "HW") %>% 
+  #   mutate(pit = paste0(transect, "p", pit)) %>% 
+  #   mutate(depth = paste0(depth, "cm")) %>% 
+  #   pivot_longer(cols = DO_pre:VWC_pre, names_to = "var", values_to = "value") %>% 
+  #   pivot_wider(names_from = c(var, pit, depth), values_from = value) %>% 
+  #   select(-c(transect))
+  # # Keep only WW pits for Wade
+  # soil_means_sub_wade <- soil_means_sub %>% filter(site == "Wade" & transect == "WW") %>% 
+  #   mutate(pit = paste0(transect, "p", pit)) %>% 
+  #   mutate(depth = paste0(depth, "cm")) %>% 
+  #   pivot_longer(cols = DO_pre:VWC_pre, names_to = "var", values_to = "value") %>% 
+  #   pivot_wider(names_from = c(var, pit, depth), values_from = value) %>% 
+  #   select(-c(transect))
+  
+  
+# For GW pre-event mean levels, let's calculate an average value across multiple wells to get a value more representative of the whole wet transect
+# for 1- and 4-days prior to the event
+  # To do this we'll scale the values between 0 and 1 using range normalization
+  gw_preEvent_means_agg <- gw_preEvent_means %>% 
+    # Range normalize mean levels for each site and well_xd
+    group_by(site) %>% 
+    mutate_at(vars(c(gw_1d_well1:ncol(.))),
+                   .funs = list(~ (. - min(., na.rm = T)) / (max(., na.rm = T) - min(., na.rm = T)))) %>% 
+    ungroup() %>% 
+    # Calculate 1-day and 4-day pre event mean
+    pivot_longer(cols = starts_with("gw"), names_to = "var", values_to = "val") %>% 
+    mutate(days = str_sub(var, 4, 5)) %>% 
+    group_by(site, event_start, days) %>% 
+    summarize(mean = mean(val, na.rm = T)) %>% 
+    pivot_wider(names_from = days, values_from = mean) %>% 
+    rename(gw_1d_allWells = `1d`, gw_4d_allWells = `4d`)
+  
+  
+# Join all variables together ----
   allvars <- full_join(rain_mets, q_event_max_delta, by = c("site", "event_start")) %>% 
     full_join(q_event_dQRate, by = c("site", "event_start")) %>%
     full_join(q_preEvent_means, by = c("site", "event_start")) %>% 
@@ -1084,7 +1165,10 @@
     full_join(stream_means, by = c("site", "event_start")) %>% 
     full_join(turb_event_max, by = c("site", "event_start")) %>% 
     full_join(gw_event_max_delta, by = c("site", "event_start")) %>% 
-    full_join(gw_preEvent_means, by = c("site", "event_start")) %>%   
+    full_join(gw_preEvent_means, by = c("site", "event_start")) %>% 
+    full_join(gw_preEvent_means_agg, by = c("site", "event_start")) %>% 
+    full_join(soil_means_sub2, by = c("site", "event_start")) %>% 
+    full_join(soil_means_agg, by = c("site", "event_start")) %>% 
     full_join(events_all %>% 
                 select(site, event_start, time_sinceLastEvent, multipeak) %>% 
                 mutate(time_sinceLastEvent = as.numeric(time_sinceLastEvent)), by = c("site", "event_start")) %>% 
@@ -1096,51 +1180,44 @@
     mutate(DOY = yday(event_start)) %>% 
     # Shed rows with no event start
     filter(!is.na(event_start)) %>% 
-    # Let's just look at events where all variables are complete
-    # na.omit %>% 
     # Rearrange columns
     select(site, event_start, DOY, season, everything())
   
-  # Which soil vars to add?
-  # Look at which transects, pits and depths we have
-  whichSoil <- soil_means %>% 
-    select(transect, pit, depth) %>% 
-    distinct()
+  # allvars <- full_join(rain_mets, q_event_max_delta, by = c("site", "event_start")) %>% 
+  #   full_join(q_event_dQRate, by = c("site", "event_start")) %>%
+  #   full_join(q_preEvent_means, by = c("site", "event_start")) %>% 
+  #   full_join(stream_eventYields, by = c("site", "event_start")) %>% 
+  #   full_join(stream_means, by = c("site", "event_start")) %>% 
+  #   full_join(turb_event_max, by = c("site", "event_start")) %>% 
+  #   full_join(gw_event_max_delta, by = c("site", "event_start")) %>% 
+  #   full_join(gw_preEvent_means, by = c("site", "event_start")) %>%   
+  #   full_join(events_all %>% 
+  #               select(site, event_start, time_sinceLastEvent, multipeak) %>% 
+  #               mutate(time_sinceLastEvent = as.numeric(time_sinceLastEvent)), by = c("site", "event_start")) %>% 
+  #   # Add hourly PET
+  #   mutate(timestamp_hour = floor_date(event_start, unit = "1 hour")) %>%   
+  #   left_join(PET %>% rename(timestamp_hour = timestamp), by = c("site", "timestamp_hour")) %>% 
+  #   select(-timestamp_hour) %>% 
+  #   # Add day of year
+  #   mutate(DOY = yday(event_start)) %>% 
+  #   # Shed rows with no event start
+  #   filter(!is.na(event_start)) %>% 
+  #   # Let's just look at events where all variables are complete
+  #   # na.omit %>% 
+  #   # Rearrange columns
+  #   select(site, event_start, DOY, season, everything())  
   
-  # Let's do 15 cm only at HW 1 & 3 and WW 1 & 6
-  # Choosing 15 cm only here b/c we have GW level data to get at deeper processes (e.g., 45 cm)
-  # soil_means_sub <- soil_means %>% 
-  #   filter((transect == "HW" & depth == 15 & pit %in% c(1, 3)) |
-  #          (transect == "WW" & depth == 15 & pit %in% c(1, 6)))
-  # Because GW level data is limited to 2018-2019, let's also look at 45 cm (esp. VWC)
-  soil_means_sub <- soil_means %>% 
-    filter((transect == "HW" & depth %in% c(15, 30, 45) & pit %in% c(1, 3)) |
-           (transect == "WW" & depth %in% c(15, 30, 45) & pit %in% c(1, 6)))  
 
-  # Split those into separate dfs for Hungerford and Wade
-    # and create columns for each variable, a version for each pit
-  soil_means_sub_hford <- soil_means_sub %>% filter(site == "Hungerford") %>% 
-    mutate(pit = paste0("pit", pit)) %>% 
-    mutate(depth = paste0(depth, "cm")) %>% 
-    pivot_longer(cols = DO_pre:VWC_pre, names_to = "var", values_to = "value") %>% 
-    pivot_wider(names_from = c(var, pit, depth), values_from = value) %>% 
-    select(-c(transect))
-  soil_means_sub_wade <- soil_means_sub %>% filter(site == "Wade") %>% 
-    mutate(pit = paste0("pit", pit)) %>% 
-    mutate(depth = paste0(depth, "cm")) %>% 
-    pivot_longer(cols = DO_pre:VWC_pre, names_to = "var", values_to = "value") %>% 
-    pivot_wider(names_from = c(var, pit, depth), values_from = value) %>% 
-    select(-c(transect))
-  
-  # Split the allvars into separate dfs for Hungerford and Wade & join the soil variables
-  allvars_hford <- allvars %>% filter(site == "Hungerford") %>%
-    full_join(soil_means_sub_hford, by = c("site", "event_start")) %>% 
-    # Drop unnecessary columns
-    select(-c(ends_with("well3")))
-    # %>% na.omit  
-  allvars_wade <- allvars %>% filter(site == "Wade") %>%
-    full_join(soil_means_sub_wade, by = c("site", "event_start"))
-    # %>% na.omit
+# Split the allvars into separate dfs for Hungerford and Wade & join the soil variables
+allvars_hford <- allvars %>% filter(site == "Hungerford") %>%
+  full_join(soil_means_sub_hford, by = c("site", "event_start")) %>% 
+  full_join(soil_means_agg %>% filter(site == "Hungerford"), by = c("site", "event_start"))
+  # Drop unnecessary columns
+  select(-c(ends_with("well3")))
+  # %>% na.omit  
+allvars_wade <- allvars %>% filter(site == "Wade") %>%
+  full_join(soil_means_sub_wade, by = c("site", "event_start")) %>% 
+  full_join(soil_means_agg %>% filter(site == "Wade"), by = c("site", "event_start"))
   
 # # Look at distributions
 #   allvars_hford %>% 
