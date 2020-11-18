@@ -709,15 +709,15 @@
   airT_means <- setDT(comb_met)[, c("airT_1d", "airT_4d") 
                     := list(frollmean(lag(temp_C, n = 1), n = 288*1, align = "right", fill = NA, na.rm = T),
                             frollmean(lag(temp_C, n = 1), n = 288*4, align = "right", fill = NA, na.rm = T)),
-                            by = site][!is.na(event_start)][, c("site", "event_start", "airT_1d", "airT_3d")]
+                            by = site][!is.na(event_start)][, c("site", "event_start", "airT_1d", "airT_4d")]
   solarRad_means <- setDT(comb_met)[, c("solarRad_1d", "solarRad_4d") 
                     := list(frollmean(lag(solarRad_wm2, n = 1), n = 288*1, align = "right", fill = NA, na.rm = T),
                             frollmean(lag(solarRad_wm2, n = 1), n = 288*4, align = "right", fill = NA, na.rm = T)),
-                            by = site][!is.na(event_start)][, c("site", "event_start", "solarRad_1d", "solarRad_3d")]
+                            by = site][!is.na(event_start)][, c("site", "event_start", "solarRad_1d", "solarRad_4d")]
   dewPoint_means <- setDT(comb_met)[, c("dewPoint_1d", "dewPoint_4d") 
                     := list(frollmean(lag(dewPoint, n = 1), n = 288*1, align = "right", fill = NA, na.rm = T),
                             frollmean(lag(dewPoint, n = 1), n = 288*4, align = "right", fill = NA, na.rm = T)),
-                            by = site][!is.na(event_start)][, c("site", "event_start", "dewPoint_1d", "dewPoint_3d")]
+                            by = site][!is.na(event_start)][, c("site", "event_start", "dewPoint_1d", "dewPoint_4d")]
   # Join these
   met_mets <- full_join(airT_means, solarRad_means, by = c("site", "event_start")) %>% 
     full_join(dewPoint_means, by = c("site", "event_start"))
@@ -1068,13 +1068,10 @@
       select(site, event_start, matches("(1|2|3|4a|5|7)$"))
     
     rm(comb_gw, comb_gw_long, gw_all)
-    
-  # Play sound when done!
-  beep(sound = "fanfare") 
       
-
 # ----    
 
+    
 # Decide on which soil variables and do some additonal calcs for soil & gw metrics ----  
 # Which soil vars to add?
   # Look at which transects, pits and depths we have
@@ -1157,8 +1154,12 @@
     rename(gw_1d_allWells = `1d`, gw_4d_allWells = `4d`)
   
   
+  # Play sound when done!
+  beep(sound = "fanfare")   
+  
 # Join all variables together ----
   allvars <- full_join(rain_mets, q_event_max_delta, by = c("site", "event_start")) %>% 
+    full_join(met_mets, by = c("site", "event_start")) %>%
     full_join(q_event_dQRate, by = c("site", "event_start")) %>%
     full_join(q_preEvent_means, by = c("site", "event_start")) %>% 
     full_join(stream_eventYields, by = c("site", "event_start")) %>% 
