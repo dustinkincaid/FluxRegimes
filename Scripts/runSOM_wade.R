@@ -93,6 +93,8 @@ wade %>%
     # Drop all the rain_Xd vars, b/c API_4d should cover this, though would be interesting to test how many days pre-event (e.g., 4 days for API) matters
   # Soil temps
     # soil temp @ 15cm @ pits 1 & 6 highly correlated, so let's keep the temp from pit 6 b/c we're using the VWC from that pit
+  # Other MET vars
+    # I'm going to drop all MET vars b/c we are missing them for a large chunk of our 2017 events AND they are reflected in other vars (e.g., soilTemp)  
   
 # Look at correlations again without dropped variables
   # List the additional dropped variables
@@ -117,6 +119,12 @@ wade %>%
                               gw_1d_allWells,
                               gw_4d_allWells,
                               VWC_pre_wet_45cm,
+                              airT_1d,
+                              airT_4d,
+                              dewPoint_1d,
+                              dewPoint_4d,
+                              solarRad_1d,
+                              solarRad_4d,                              
                               # Drop this complicated variable
                               q_event_dQRate_cmsPerHr
                               ))

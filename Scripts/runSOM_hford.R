@@ -70,7 +70,7 @@ hford %>%
   # Other correlations
   # scatter plot comparison
   hford %>% 
-    ggplot(aes(x = rain_int_mmPERmin_max, y = rain_int_mmPERmin_mean)) +
+    ggplot(aes(x = airT_4d, y = dewPoint_4d)) +
     geom_point(shape = 1) +
     geom_abline(slope = 1) +
     geom_smooth(method = "lm") +
@@ -103,6 +103,10 @@ hford %>%
     # rain_event_total_mm and API_4d are highly correlated (87.5%); let's keep both for now, but we could:
       # let's keep API b/c more representative of what's been happening in catchment previous to event
     # rain_int_mmPERmin_max & _mean are highly correlated (74.4%); in a previous SOM _max was more informative, so keep max
+  # Other MET vars
+    # I'm going to drop all MET vars b/c we are missing them for a large chunk of our 2017 events AND they are reflected in other vars (e.g., soilTemp)
+    # Per the 1-d vs. 4-d rule above, let's drop all 1-d MET vars
+    # airT_4d & dewPoint_4d are highly correlated (96.8%); let's drop dewPoint_4d
     
   
 # These were used for the 2020-11-12 run    
@@ -150,6 +154,12 @@ hford %>%
                               VWC_pre_wet_45cm,
                               q_1d,
                               rain_int_mmPERmin_mean,
+                              airT_1d,
+                              airT_4d,
+                              dewPoint_1d,
+                              dewPoint_4d,
+                              solarRad_1d,
+                              solarRad_4d,
                               # Drop this complicated variable
                               q_event_dQRate_cmsPerHr))
 
