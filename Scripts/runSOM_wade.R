@@ -591,6 +591,9 @@ datWithCluster <- clustAssignmDF %>%
   select(-one_of(drop.vars)) %>% 
   # Arrange columns
   select(site:ncol(.), everything())
+  
+  # Write to CSV
+  write_csv(datWithCluster, paste0("Data/", "SOMresults", "_", myDataSet, "_", Sys.Date(), "_", nclusters, "cl", "_", n_rows, "x", n_cols, ".csv"))
 
 # BOXPLOTS OF INDEPENDENT VARIABLES BY CLUSTER ----
   # # of plots (use this to decide how many PDF pages you want to plot all the plots on)
