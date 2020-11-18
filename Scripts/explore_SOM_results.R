@@ -7,64 +7,66 @@
   library("grid")
   library("gridExtra")  
 
-
 # Additional functions
   # Functions required to reorder a column/levels with faceting, such that the values are ordered within each facet
   # Source: https://github.com/dgrtwo/drlib/blob/master/R/reorder_within.R
-    reorder_within <- function(x, by, within, fun = mean, sep = "___", ...) {
-      new_x <- paste(x, within, sep = sep)
-      stats::reorder(new_x, by, FUN = fun)
-    }
-
-    scale_x_reordered <- function(..., sep = "___") {
-      reg <- paste0(sep, ".+$")
-      ggplot2::scale_x_discrete(labels = function(x) gsub(reg, "", x), ...)
-    }
+    # reorder_within <- function(x, by, within, fun = mean, sep = "___", ...) {
+    #   new_x <- paste(x, within, sep = sep)
+    #   stats::reorder(new_x, by, FUN = fun)
+    # }
+    # 
+    # scale_x_reordered <- function(..., sep = "___") {
+    #   reg <- paste0(sep, ".+$")
+    #   ggplot2::scale_x_discrete(labels = function(x) gsub(reg, "", x), ...)
+    # }
+    # 
+    # # We need scale_x_reordered, but here is the y-axis equivalent
+    # scale_y_reordered <- function(..., sep = "___") {
+    #   reg <- paste0(sep, ".+$")
+    #   ggplot2::scale_y_discrete(labels = function(x) gsub(reg, "", x), ...)
+    # }
   
-    # We need scale_x_reordered, but here is the y-axis equivalent
-    scale_y_reordered <- function(..., sep = "___") {
-      reg <- paste0(sep, ".+$")
-      ggplot2::scale_y_discrete(labels = function(x) gsub(reg, "", x), ...)
-    }
   
-  
-    
 # Read in data
-  # Input variables (z-scores for each variable)
-    # Hungerford
-    hf_input_z <- read_csv("Data/transformed_vars_hungerford.csv") %>% 
-      mutate(event_start = ymd_hms(event_start, tz = "Etc/GMT+4"))
-    # Wade
-    wd_input_z <- read_csv("Data/transformed_vars_wade.csv") %>% 
-      mutate(event_start = ymd_hms(event_start, tz = "Etc/GMT+4"))    
+  # Most recent SOM results
+  hford <- read_csv("Data/somResults/hford/2020-11-18/SOMresults_hford_2020-11-18_4cl_5x8.csv")
+  wade <- read_csv("Data/somResults/wade/2020-11-18/SOMresults_wade_2020-11-18_4cl_6x9.csv")
     
-  # Calculated event yields and NO3:SRP yield ratios
-    # Both sites
-    yieldsAndRatios <- read_csv("Data/event_yields_ratios.csv") %>% 
-      mutate(event_start = ymd_hms(event_start, tz = "Etc/GMT+4"))
+  # # Input variables (z-scores for each variable)
+  #   # Hungerford
+  #   hf_input_z <- read_csv("Data/transformed_vars_hungerford.csv") %>% 
+  #     mutate(event_start = ymd_hms(event_start, tz = "Etc/GMT+4"))
+  #   # Wade
+  #   wd_input_z <- read_csv("Data/transformed_vars_wade.csv") %>% 
+  #     mutate(event_start = ymd_hms(event_start, tz = "Etc/GMT+4"))    
+  #   
+  # # Calculated event yields and NO3:SRP yield ratios
+  #   # Both sites
+  #   yieldsAndRatios <- read_csv("Data/event_yields_ratios.csv") %>% 
+  #     mutate(event_start = ymd_hms(event_start, tz = "Etc/GMT+4"))
+  #   
+  # # Calculated hysteresis metrics
+  #   hyst <- read_csv("Data/hysteresis_indices.csv") %>% 
+  #     mutate(event_start = ymd_hms(event_start, tz = "Etc/GMT+4"),
+  #            event_end = ymd_hms(event_end, tz = "Etc/GMT+4"))
     
-  # Calculated hysteresis metrics
-    hyst <- read_csv("Data/hysteresis_indices.csv") %>% 
-      mutate(event_start = ymd_hms(event_start, tz = "Etc/GMT+4"),
-             event_end = ymd_hms(event_end, tz = "Etc/GMT+4"))
-    
-  # SOM cluster output
-    # Hungerford
-    som_hf_4C_14V <- read_csv("Data/cluster_results_hf_4clusters_14vars.csv") %>% 
-      rename(event_start = "X1", weight = "0") %>% 
-      mutate(event_start = ymd_hms(event_start, tz = "Etc/GMT+4")) %>% 
-      mutate(site = "Hungerford") %>% 
-      # There were event_start + weight + cluster replicates; not sure if these
-      # are meaningful, but removing them for now
-      distinct()
-    # Wade
-    som_wd_4C_15V <- read_csv("Data/cluster_results_wd_4clusters_15vars.csv") %>% 
-      rename(event_start = "X1", weight = "0") %>% 
-      mutate(event_start = ymd_hms(event_start, tz = "Etc/GMT+4")) %>% 
-      mutate(site = "Wade") %>% 
-      # There were event_start + weight + cluster replicates; not sure if these
-      # are meaningful, but removing them for now
-      distinct()    
+  # # SOM cluster output
+  #   # Hungerford
+  #   som_hf_4C_14V <- read_csv("Data/cluster_results_hf_4clusters_14vars.csv") %>% 
+  #     rename(event_start = "X1", weight = "0") %>% 
+  #     mutate(event_start = ymd_hms(event_start, tz = "Etc/GMT+4")) %>% 
+  #     mutate(site = "Hungerford") %>% 
+  #     # There were event_start + weight + cluster replicates; not sure if these
+  #     # are meaningful, but removing them for now
+  #     distinct()
+  #   # Wade
+  #   som_wd_4C_15V <- read_csv("Data/cluster_results_wd_4clusters_15vars.csv") %>% 
+  #     rename(event_start = "X1", weight = "0") %>% 
+  #     mutate(event_start = ymd_hms(event_start, tz = "Etc/GMT+4")) %>% 
+  #     mutate(site = "Wade") %>% 
+  #     # There were event_start + weight + cluster replicates; not sure if these
+  #     # are meaningful, but removing them for now
+  #     distinct()    
     
 
 # Plotting specifics
@@ -90,7 +92,7 @@
                   legend.title = element_text(size = 6)) 
   
   # Labels for the panels by cluster
-  labels <- c("0" = "Cluster 0", "1" = "Cluster 1", "2" = "Cluster 2", "3" = "Cluster 3")  
+  labels <- c("0" = "Cluster 0", "1" = "Cluster 1", "2" = "Cluster 2", "3" = "Cluster 3", "4" = "Cluster 4")  
   
   # Text for Clockwise, Counterclockwise, Diluting, Flushing on the plots
   text_cw <- textGrob("Clockwise", gp = gpar(fontsize = 10))
@@ -99,12 +101,10 @@
   text_flu <- textGrob("Flushing", gp = gpar(fontsize = 10), rot = 270)  
   
  
-       
 # Summarize the clusters
-  # HUNGERFORD - 4 clusters, 14 variables
+  # HUNGERFORD
     # Look at seasonal differences by cluster
-    som_hf_4C_14V %>% 
-      full_join(hf_input_z, by = c("site", "event_start")) %>% 
+    hford %>% 
       group_by(cluster, season) %>% 
       tally() %>% 
       # Order the seasons
@@ -122,14 +122,18 @@
 
     # Look at z-scores by cluster
     # Plotting median z-scores
-    som_hf_4C_14V %>% 
-      full_join(hf_input_z, by = c("site", "event_start")) %>% 
-      pivot_longer(cols = rain_event_total_mm:VWC_mean_preEvent_3, names_to = "var", values_to = "value") %>% 
+    hford %>% 
+      # Calculate z-scores for each independent variable
+      mutate_at(vars(c(DOY:ncol(.))),
+              .funs = list(~ (. - mean(., na.rm = T)) / sd(., na.rm = T))) %>%
+      pivot_longer(cols = DOY:ncol(.), names_to = "var", values_to = "value") %>% 
       group_by(cluster, var) %>% 
-      summarize(median = median(value)) %>% 
-      ggplot(aes(x = reorder_within(x = var, by = abs(median), within = cluster), y = median)) +
+      summarize(median = median(value, na.rm = T)) %>% 
+      # Rename clusters
+      mutate(cluster = paste("Cluster", cluster, sep = " ")) %>% 
+      ggplot(aes(x = var, y = median)) +
         # Must use scales = "free" when using the reordering functions
-        facet_wrap(~cluster, scales = "free", labeller=labeller(cluster = labels)) +
+        facet_wrap(~cluster, scales = "free") +
         geom_bar(stat = "identity") +
         scale_x_reordered() +
         ylab("Median z-scores") +
