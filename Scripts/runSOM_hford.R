@@ -51,7 +51,7 @@ hford %>%
   # For now, let's drop the aggreate soil vars for the dry site and keep the wet ones
   select(-c(contains("pre_dry"))) %>% 
   # Keep only gw well 5 for now
-  select(-c(ends_with("well1"))) %>% 
+  # select(-c(ends_with("well1"))) %>% 
   # Keep only complete observations/rows (no NAs in any of the columns)
   na.omit() %>% 
   # Visualize these
@@ -548,12 +548,12 @@ for (i in 1:nrow(params)) {
       
 } # end for loop of SOM runs
 
-# Format and Export Results Tables ----
+# FORMAT & EXPORT RESULTS TABLES ----
 colnames(Results) <- c('Run','DataSet','Nodes','Topol','rows','cols','normMeth', 
                        'wghtMeth','niter', 'alphaCrs', 'alphaFin', 
                        'Clusters', 'ColRowRat', 'Dist_mn','QE','npF','pVal_npF','blank') 
 
-ResultsDF <- as_tibble(Results)
+ResultsDF <- as_tibble(Results) %>% type_convert()
 write_csv(ResultsDF, paste0(newFolder,"/","Results_", myDataSet,"_",nclusters,"_cl",".csv"))
 
 clustAssignm <- clustAssignments[-1, ]
@@ -566,16 +566,51 @@ clustAssignmDF <- as_tibble(clustAssignm)
 write_csv(clustAssignmDF, paste0(newFolder,"/","ClustAssign_",myDataSet,"_",nclusters,"_cl",".csv"))
 
 
-# Create DF with event IDs and cluster numbers ----
+# CHOOSE BEST LATTICE CONFIGURATION ----
+  # Examine the non-parametric F-stat (npF) and quantization error (QE) to choose the best lattice configuration
+  # You want to maximize npF (maximize b/w cluster variance while minimizing w/i cluster variance) &
+  # Minimize QE (avg distance b/w each data vector & best-matching unit [BMU])
 
-###   CHOOSE THE CORRECT LATTICE DIMENSIONS TO EXAMINE  ###
+  # Set coefficient for second axis on plot below
+  # Note: this might not be perfect and may need to adjust
+  coeff <- min(ResultsDF$npF)/max(ResultsDF$QE)
+  
+  # Plot npF and QE
+  ResultsDF %>% 
+    # Parse columns into correct type (done above)
+    # type_convert() %>% 
+    # Create lattice config ID (rows x cols)
+    mutate(latID = paste(rows, cols, sep = "x")) %>% 
+    # Plot
+    ggplot(aes(x = reorder(latID, -npF))) +
+    geom_bar(aes(y = npF, fill = "npF"), stat= "identity") +
+    geom_line(aes(y = QE * coeff, group = 1, color = "QE")) +
+    geom_point(aes(y = QE * coeff, group = 1, color = "QE"), size = 2) +
+    scale_y_continuous(
+      name = "npF",
+      sec.axis = sec_axis(~. / coeff, name = "QE")
+    ) +
+    scale_fill_manual(values = "gray70") +
+    scale_color_manual(values = "blue") +
+    xlab("Lattice config. (rows x cols)") +
+    theme_bw() +
+    theme(legend.title = element_blank(),
+          legend.spacing = unit(-0.5, "lines"),
+          panel.grid = element_blank(),
+          axis.title.x = element_text(margin = margin(t = 5, r = 0, b = 0, l = 0)))
+  
+  # Save plot
+  ggsave(paste0(newFolder,"/","npFvsQE.pdf"), height = 4, width = 6, units = "in", dpi = 75)
+  
+# Choose lattice dimensions you want to examine based on npf/QE plot above
+  n_rows = 6
+  n_cols = 9
+  
+# CREATE DF WITH EVENT IDs & CLUSTER #'s ----  
 datWithCluster <- clustAssignmDF %>% 
   # Parse columns into correct type
   type_convert() %>% 
-  
-  # SELECT THE LATTICE CONFIG YOU WAN TO EXTRACT
-  filter(rows == 5 & cols == 7) %>% 
-  
+  filter(rows == n_rows & cols == n_cols) %>% 
   # Pivot to longer format
   pivot_longer(cols = obs1:ncol(.), names_to = "obs", values_to = "cluster") %>% 
   select(cluster) %>% 
@@ -589,18 +624,16 @@ datWithCluster <- clustAssignmDF %>%
   # Arrange columns
   select(site:ncol(.), everything())
 
-
-# Selecting vars to keep Step 2 ----
-# Plot independent variables separated by cluster
-  # Number of plots
+# BOXPLOTS OF INDEPENDENT VARIABLES BY CLUSTER ----
+  # # of plots (use this to decide how many PDF pages you want to plot all the plots on)
   df <- datWithCluster %>% 
     pivot_longer(cols = DOY:ncol(.), names_to = "var", values_to = "value")
   length(unique(df$var))
 
-  # Plot
-  pdf(paste0(newFolder, "/", "boxplots_varsByCluster.pdf"),
+  # Plot & save
+  pdf(paste0(newFolder, "/", "boxplots_varsByCluster", "_", n_rows, "x", n_cols, ".pdf"),
       width = 7.5, height = 10)
-  for(i in 1:2){
+  for(i in 1:2){ # this is the # of PDF pages your plots will be spread across
     print(datWithCluster %>% 
       pivot_longer(cols = DOY:ncol(.), names_to = "var", values_to = "value") %>% 
       ggplot(aes(x = cluster, y = value, group = cluster)) +
@@ -614,4 +647,3 @@ datWithCluster <- clustAssignmDF %>%
             panel.spacing.y = unit(0.45, "inches")))
   }
   dev.off()
-  
