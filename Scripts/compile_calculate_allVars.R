@@ -1182,7 +1182,7 @@
     # Shed rows with no event start
     filter(!is.na(event_start)) %>% 
     # Rearrange columns
-    select(site, event_start, DOY, season, everything())
+    select(site, event_start, DOY, season, NO3_kg_km2, SRP_kg_km2, event_NO3_SRP, turb_kg_km2, everything())
   
   # allvars <- full_join(rain_mets, q_event_max_delta, by = c("site", "event_start")) %>% 
   #   full_join(q_event_dQRate, by = c("site", "event_start")) %>%
