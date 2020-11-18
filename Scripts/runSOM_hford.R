@@ -603,8 +603,8 @@ write_csv(clustAssignmDF, paste0(newFolder,"/","ClustAssign_",myDataSet,"_",nclu
   ggsave(paste0(newFolder,"/","npFvsQE.pdf"), height = 4, width = 6, units = "in", dpi = 75)
   
 # Choose lattice dimensions you want to examine based on npf/QE plot above
-  n_rows = 6
-  n_cols = 9
+  n_rows = 5
+  n_cols = 8
   
 # CREATE DF WITH EVENT IDs & CLUSTER #'s ----  
 datWithCluster <- clustAssignmDF %>% 
