@@ -1,0 +1,15 @@
+myRun,myDataSet,nodes,myTopo,rows,cols,normMeth,wghtMeth,niter,crsAlpha,finAlpha,nClusters,colRowRatio
+1,wade,35,hexagonal,5,7,L2norm,noPCA,1000,0.05,0.01,4,1.4
+2,wade,40,hexagonal,5,8,L2norm,noPCA,1000,0.05,0.01,4,1.6
+3,wade,45,hexagonal,5,9,L2norm,noPCA,1000,0.05,0.01,4,1.8
+4,wade,50,hexagonal,5,10,L2norm,noPCA,1000,0.05,0.01,4,2.0
+5,wade,55,hexagonal,5,11,L2norm,noPCA,1000,0.05,0.01,4,2.2
+6,wade,42,hexagonal,6,7,L2norm,noPCA,1000,0.05,0.01,4,1.2
+7,wade,48,hexagonal,6,8,L2norm,noPCA,1000,0.05,0.01,4,1.3
+8,wade,54,hexagonal,6,9,L2norm,noPCA,1000,0.05,0.01,4,1.5
+9,wade,42,hexagonal,7,6,L2norm,noPCA,1000,0.05,0.01,4,0.9
+10,wade,49,hexagonal,7,7,L2norm,noPCA,1000,0.05,0.01,4,1.0
+11,wade,56,hexagonal,7,8,L2norm,noPCA,1000,0.05,0.01,4,1.1
+12,wade,40,hexagonal,8,5,L2norm,noPCA,1000,0.05,0.01,4,0.6
+13,wade,48,hexagonal,8,6,L2norm,noPCA,1000,0.05,0.01,4,0.8
+14,wade,56,hexagonal,8,7,L2norm,noPCA,1000,0.05,0.01,4,0.9
