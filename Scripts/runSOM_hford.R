@@ -35,11 +35,21 @@ drop.info <- names(hford %>%
 hford %>% 
   # Remove the vars listed above
   select(-one_of(drop.info)) %>% 
-  # Remove all 30cm & 45cm soil variables except VWC
-  select(-c(DO_pre_pit1_30cm, Redox_pre_pit1_30cm, SoilTemp_pre_pit1_30cm,
-            DO_pre_pit3_30cm, Redox_pre_pit3_30cm, SoilTemp_pre_pit3_30cm,
-            DO_pre_pit1_45cm, Redox_pre_pit1_45cm, SoilTemp_pre_pit1_45cm,
-            DO_pre_pit3_45cm, Redox_pre_pit3_45cm, SoilTemp_pre_pit3_45cm)) %>%
+  # Remove all rain_Xd vars and keep API instead
+  select(-c(rain_1d:rain_30d)) %>% 
+  # Removal all GW event data (e.g., max and change)
+  select(-c(starts_with("gw_event_"))) %>% 
+  # Remove all pre-event GW levels for individual wells and keep the aggregate ones
+  select(-c(starts_with(c("gw_1d_well", "gw_4d_well")))) %>% 
+  # Remove all pre-event soil var means and keep the aggregate "dry" and "wet" ones
+  select(-c(contains("HWp"))) %>% 
+  # Remove all 30cm & 45cm aggreate soil vars except VWC
+  select(-c(DO_pre_dry_30cm, Redox_pre_dry_30cm, SoilTemp_pre_dry_30cm,
+            DO_pre_wet_30cm, Redox_pre_wet_30cm, SoilTemp_pre_wet_30cm,
+            DO_pre_dry_45cm, Redox_pre_dry_45cm, SoilTemp_pre_dry_45cm,
+            DO_pre_wet_45cm, Redox_pre_wet_45cm, SoilTemp_pre_wet_45cm)) %>%
+  # For now, let's drop the aggreate soil vars for the dry site and keep the wet ones
+  select(-c(contains("pre_dry"))) %>% 
   # Keep only gw well 5 for now
   select(-c(ends_with("well1"))) %>% 
   # Keep only complete observations/rows (no NAs in any of the columns)
@@ -49,30 +59,53 @@ hford %>%
 
 # Look at plots of correlated variables
   # GW level ~ VWC
-  # hford %>% 
-  #   # pivot_longer(cols = c(VWC_pre_pit1_15cm, VWC_pre_pit1_30cm, VWC_pre_pit1_45cm, VWC_pre_pit3_15cm, VWC_pre_pit3_30cm, VWC_pre_pit3_45cm), names_to = "var", values_to = "level") %>% 
-  #   pivot_longer(cols = c(VWC_pre_pit3_15cm, VWC_pre_pit3_30cm, VWC_pre_pit3_45cm), names_to = "var", values_to = "VWC") %>% 
-  #   ggplot(aes(x = gw_4d_well5, y = VWC, color = var)) +
-  #   geom_point(shape = 1) +
-  #   geom_abline(slope = 1) +
-  #   theme_classic()
+  hford %>%
+    # pivot_longer(cols = c(VWC_pre_pit1_15cm, VWC_pre_pit1_30cm, VWC_pre_pit1_45cm, VWC_pre_pit3_15cm, VWC_pre_pit3_30cm, VWC_pre_pit3_45cm), names_to = "var", values_to = "level") %>%
+    pivot_longer(cols = c(VWC_pre_wet_15cm, VWC_pre_wet_30cm), names_to = "var", values_to = "VWC") %>%
+    ggplot(aes(x = gw_4d_allWells, y = VWC, color = var)) +
+    geom_point(shape = 1) +
+    geom_abline(slope = 1) +
+    theme_classic()
 
   # Other correlations
   # scatter plot comparison
   hford %>% 
-    ggplot(aes(x = gw_4d_well1, y = gw_4d_well5)) +
+    ggplot(aes(x = rain_int_mmPERmin_max, y = rain_int_mmPERmin_mean)) +
     geom_point(shape = 1) +
     geom_abline(slope = 1) +
     geom_smooth(method = "lm") +
     theme_classic()
   # boxplot comparison
   hford %>% 
-    pivot_longer(cols = c(DO_pre_pit1_15cm, DO_pre_pit3_15cm), names_to = "var", values_to = "value") %>% 
+    pivot_longer(cols = c(rain_int_mmPERmin_max, rain_int_mmPERmin_mean), names_to = "var", values_to = "value") %>% 
     ggplot(aes(x = var, y = value)) +
     geom_boxplot()
+  
+  hford %>% 
+    ggplot(aes(x = rain_int_mmPERmin_max)) +
+    geom_histogram()
 
 
 # Decisions
+# These are for 2020-11-17 run
+  # If the 1-d and 4-d values for a variable are highly correlated, use the 4-d value
+    # gw_1d_allWells & gw_4d_allWells are highly correlated (99.2%), so drop gw_1d_allWells
+  # Soil temps
+    # The aggregate soil temp at 15 cm for dry and wet locations are highly correlated (99%); let's drop the
+  # Q
+    # q_event_delta & q_event_max are highly correlated (96.3%); let's keep both for now, but we could:
+      # but q_event_max is more normally distributed, so let's keep it vs delta
+    # keeping with the 1d vs. 4d rule above, because q_1d and q_4d are hihgly correlated (86.4%), drop q_1d
+  # Trying to find a VWC variable that correlates well with GW level so that I can remove the GW level (no GW data in 2017)
+    # the 4-day pre-event GW level mean (gw_4d_allWells) is highly correlated with VWC_pre_wet_30cm (94.5%), so drop gw_4d_allWells
+    # I still want to all soil vars represented at 15 cm, so let's keep VWC at 15 & 30 cm, but drop 45 cm
+  # Rain
+    # rain_event_total_mm and API_4d are highly correlated (87.5%); let's keep both for now, but we could:
+      # let's keep API b/c more representative of what's been happening in catchment previous to event
+    # rain_int_mmPERmin_max & _mean are highly correlated (74.4%); in a previous SOM _max was more informative, so keep max
+    
+  
+# These were used for the 2020-11-12 run    
   # If the 1-d and 4-d values for a variable are highly correlated, use the 4-d value
     # gw_1d and gw_4d for well5 highly correlated (99.3%); remove gw_1d
   # Trying to find a VWC variable that correlates well with GW level so that I can remove the GW level (no GW data in 2017)
@@ -96,24 +129,29 @@ hford %>%
 # Look at correlations again without dropped variables
   # List the additional dropped variables
   drop.vars <- names(hford %>% 
-                       select(# Remove all 30cm & 45cm soil variables except VWC
-                              DO_pre_pit1_30cm, Redox_pre_pit1_30cm, SoilTemp_pre_pit1_30cm,
-                              DO_pre_pit3_30cm, Redox_pre_pit3_30cm, SoilTemp_pre_pit3_30cm,
-                              DO_pre_pit1_45cm, Redox_pre_pit1_45cm, SoilTemp_pre_pit1_45cm,
-                              DO_pre_pit3_45cm, Redox_pre_pit3_45cm, SoilTemp_pre_pit3_45cm,
-                              # Keep only gw well 5 for now
-                              ends_with("well1"),
+                       select(# Remove all rain_Xd vars and keep API instead
+                              rain_1d:rain_30d,
+                              # Removal all GW event data (e.g., max and change)
+                              starts_with("gw_event_"),
+                              # Remove all pre-event GW levels for individual wells and keep the aggregate ones
+                              starts_with(c("gw_1d_well", "gw_4d_well")),
+                              # Remove all pre-event soil var means and keep the aggregate "dry" and "wet" ones
+                              contains("HWp"),
+                              # Remove all 30cm & 45cm aggreate soil vars except VWC
+                              DO_pre_dry_30cm, Redox_pre_dry_30cm, SoilTemp_pre_dry_30cm,
+                              DO_pre_wet_30cm, Redox_pre_wet_30cm, SoilTemp_pre_wet_30cm,
+                              DO_pre_dry_45cm, Redox_pre_dry_45cm, SoilTemp_pre_dry_45cm,
+                              DO_pre_wet_45cm, Redox_pre_wet_45cm, SoilTemp_pre_wet_45cm,
+                              # For now, let's drop the aggreate soil vars for the dry site and keep the wet ones
+                              contains("pre_dry"),
                               # Drop these highly correlated variables
-                              gw_1d_well5,
-                              VWC_pre_pit1_15cm, VWC_pre_pit1_30cm, VWC_pre_pit1_45cm, 
-                              VWC_pre_pit3_30cm, VWC_pre_pit3_45cm,
-                              contains("gw"),
-                              SoilTemp_pre_pit1_15cm,
-                              # q_event_delta,
+                              gw_1d_allWells,
+                              gw_4d_allWells,
+                              VWC_pre_wet_45cm,
                               q_1d,
-                              # rain_event_total_mm,
-                              q_event_dQRate_cmsPerHr,
-                              rain_1d:rain_30d))
+                              rain_int_mmPERmin_mean,
+                              # Drop this complicated variable
+                              q_event_dQRate_cmsPerHr))
 
   # Create df w/ dropped variables
   hford_drop <- hford %>% 
@@ -185,7 +223,7 @@ sedRegPallette=c("cyan", "yellow", "orange", "red", "green3", "orchid","gray", "
 
 # Read in table of parameters (grid rows, cols, grid type, learning rate etc)
 ### IMPORTANT: cannot have number nodes greater than num observations
-params <- read_csv("Data/somParams/params_SOM_hford_2020-11-12.csv")
+params <- read_csv("Data/somParams/params_SOM_hford_2020-11-17.csv")
 params <- as.matrix(params[1:nrow(params),])
 
 # initialize matrix to store results of each SOM run
@@ -529,11 +567,15 @@ write_csv(clustAssignmDF, paste0(newFolder,"/","ClustAssign_",myDataSet,"_",nclu
 
 
 # Create DF with event IDs and cluster numbers ----
+
+###   CHOOSE THE CORRECT LATTICE DIMENSIONS TO EXAMINE  ###
 datWithCluster <- clustAssignmDF %>% 
   # Parse columns into correct type
   type_convert() %>% 
-  # Select the correct lattice config you want to extract
-  filter(rows == 6 & cols == 6) %>% 
+  
+  # SELECT THE LATTICE CONFIG YOU WAN TO EXTRACT
+  filter(rows == 5 & cols == 7) %>% 
+  
   # Pivot to longer format
   pivot_longer(cols = obs1:ncol(.), names_to = "obs", values_to = "cluster") %>% 
   select(cluster) %>% 
