@@ -29,26 +29,15 @@
   
 # Read in data
   # Most recent SOM results
-  hford <- read_csv("Data/somResults/hford/2020-11-18/SOMresults_hford_2020-11-18_4cl_5x8.csv")
-  wade <- read_csv("Data/somResults/wade/2020-11-18/SOMresults_wade_2020-11-18_4cl_6x9.csv")
-    
-  # # Input variables (z-scores for each variable)
-  #   # Hungerford
-  #   hf_input_z <- read_csv("Data/transformed_vars_hungerford.csv") %>% 
-  #     mutate(event_start = ymd_hms(event_start, tz = "Etc/GMT+4"))
-  #   # Wade
-  #   wd_input_z <- read_csv("Data/transformed_vars_wade.csv") %>% 
-  #     mutate(event_start = ymd_hms(event_start, tz = "Etc/GMT+4"))    
-  #   
-  # # Calculated event yields and NO3:SRP yield ratios
-  #   # Both sites
-  #   yieldsAndRatios <- read_csv("Data/event_yields_ratios.csv") %>% 
-  #     mutate(event_start = ymd_hms(event_start, tz = "Etc/GMT+4"))
-  #   
-  # # Calculated hysteresis metrics
-  #   hyst <- read_csv("Data/hysteresis_indices.csv") %>% 
-  #     mutate(event_start = ymd_hms(event_start, tz = "Etc/GMT+4"),
-  #            event_end = ymd_hms(event_end, tz = "Etc/GMT+4"))
+  hford <- read_csv("Data/somResults/hford/2020-11-18/SOMresults_hford_2020-11-18_4cl_5x8.csv") %>% 
+    mutate(event_start = ymd_hms(event_start, tz = "Etc/GMT+4"))
+  wade <- read_csv("Data/somResults/wade/2020-11-18/SOMresults_wade_2020-11-18_4cl_6x9.csv") %>% 
+    mutate(event_start = ymd_hms(event_start, tz = "Etc/GMT+4"))
+  
+  # Calculated hysteresis metrics
+  hyst <- read_csv("Data/hysteresis_indices.csv") %>%
+    mutate(event_start = ymd_hms(event_start, tz = "Etc/GMT+4"),
+           event_end = ymd_hms(event_end, tz = "Etc/GMT+4"))  
     
   # # SOM cluster output
   #   # Hungerford
@@ -92,7 +81,7 @@
                   legend.title = element_text(size = 6)) 
   
   # Labels for the panels by cluster
-  labels <- c("0" = "Cluster 0", "1" = "Cluster 1", "2" = "Cluster 2", "3" = "Cluster 3", "4" = "Cluster 4")  
+  # labels <- c("0" = "Cluster 0", "1" = "Cluster 1", "2" = "Cluster 2", "3" = "Cluster 3", "4" = "Cluster 4")  
   
   # Text for Clockwise, Counterclockwise, Diluting, Flushing on the plots
   text_cw <- textGrob("Clockwise", gp = gpar(fontsize = 10))
@@ -123,19 +112,19 @@
     # Look at z-scores by cluster
     # Plotting median z-scores
     hford %>% 
+      # Rename clusters
+      mutate(cluster = paste("Cluster", cluster, sep = " ")) %>% 
       # Calculate z-scores for each independent variable
       mutate_at(vars(c(DOY:ncol(.))),
               .funs = list(~ (. - mean(., na.rm = T)) / sd(., na.rm = T))) %>%
       pivot_longer(cols = DOY:ncol(.), names_to = "var", values_to = "value") %>% 
       group_by(cluster, var) %>% 
       summarize(median = median(value, na.rm = T)) %>% 
-      # Rename clusters
-      mutate(cluster = paste("Cluster", cluster, sep = " ")) %>% 
       ggplot(aes(x = var, y = median)) +
         # Must use scales = "free" when using the reordering functions
-        facet_wrap(~cluster, scales = "free") +
+        facet_wrap(~cluster) +
         geom_bar(stat = "identity") +
-        scale_x_reordered() +
+        # scale_x_reordered() +
         ylab("Median z-scores") +
         coord_flip() +
         theme_bw() +
@@ -144,18 +133,22 @@
     ggsave("Plots/SOM_hf_zScoresByCluster.png", width = 6, height = 6, units = "in", dpi = 150)
     
     # Plotting mean z-scores + SE
-    som_hf_4C_14V %>% 
-      full_join(hf_input_z, by = c("site", "event_start")) %>% 
-      pivot_longer(cols = rain_event_total_mm:VWC_mean_preEvent_3, names_to = "var", values_to = "value") %>% 
+    hford %>% 
+      # Rename clusters
+      mutate(cluster = paste("Cluster", cluster, sep = " ")) %>% 
+      # Calculate z-scores for each independent variable
+      mutate_at(vars(c(DOY:ncol(.))),
+              .funs = list(~ (. - mean(., na.rm = T)) / sd(., na.rm = T))) %>%
+      pivot_longer(cols = DOY:ncol(.), names_to = "var", values_to = "value") %>% 
       group_by(cluster, var) %>% 
       summarize(mean = mean(value),
                 SE = sd(value)/sqrt(length(!is.na(value)))) %>% 
-      ggplot(aes(x = reorder_within(x = var, by = abs(mean), within = cluster), y = mean)) +
+      ggplot(aes(x = var, y = mean)) +
         # Must use scales = "free" when using the reordering functions
-        facet_wrap(~cluster, scales = "free", labeller=labeller(cluster = labels)) +
+        facet_wrap(~cluster) +
         geom_bar(stat = "identity", position = position_dodge()) +
         geom_errorbar(aes(ymin = mean - SE, ymax = mean + SE), width = 0.2, position = position_dodge(0.9)) +
-        scale_x_reordered() +
+        # scale_x_reordered() +
         ylab("Median z-scores") +
         coord_flip() +
         theme_bw() +
@@ -163,18 +156,17 @@
               axis.title.y = element_blank())
     
     # Plot timeline of event yields & ratios colored by cluster number
-    som_hf_4C_14V %>% 
-      left_join(yieldsAndRatios, by = c("site", "event_start")) %>% 
+    hford %>% 
       mutate(log_event_NO3_SRP = log(event_NO3_SRP)) %>% 
-      pivot_longer(cols = c(NO3_kg_km2, SRP_kg_km2, log_event_NO3_SRP), names_to = "var", values_to = "value") %>% 
-      mutate(var = factor(var, levels = c("NO3_kg_km2", "SRP_kg_km2", "log_event_NO3_SRP"))) %>% 
+      pivot_longer(cols = c(NO3_kg_km2, SRP_kg_km2, log_event_NO3_SRP, turb_kg_km2), names_to = "var", values_to = "value") %>% 
+      mutate(var = factor(var, levels = c("NO3_kg_km2", "SRP_kg_km2", "log_event_NO3_SRP", "turb_kg_km2"))) %>% 
       # Add leading zero to single digit months and days
       mutate(year = year(event_start),
              month = str_pad(month(event_start), 2, pad = 0),
              day = str_pad(day(event_start), 2, pad = 0),
              month_day = paste(month, "/", day, sep = "")) %>%
       ggplot(aes(x = month_day, y = value, fill = as.factor(cluster))) +
-        facet_wrap(var ~ year, scales = "free") +
+        facet_wrap(var ~ year, scales = "free", ncol = 3) +
         geom_bar(stat = "identity") +
         scale_fill_manual(name = "Cluster",
                           values = c("#009E73", "#D55E00", "#CC79A7", "#0072B2")) +
@@ -185,8 +177,7 @@
     ggsave("Plots/SOM_hf_eventsByCluster.png", width = 10, height = 6, units = "in", dpi = 150)
     
     # Plot NO3:SRP yield ratios against water yield
-    som_hf_4C_14V %>% 
-      left_join(yieldsAndRatios, by = c("site", "event_start")) %>%
+    hford %>% 
       ggplot(aes(x = q_mm, y = log(event_NO3_SRP), color = as.factor(cluster))) +
         geom_point(size = 2, stroke = 0.75, alpha = 0.8) +
         #geom_smooth(method=lm, se=TRUE) +
@@ -194,7 +185,7 @@
                           values = c("#009E73", "#D55E00", "#CC79A7", "#0072B2")) +
         # geom_hline(yintercept = 16, linetype = "dashed", size = 0.75, color = "gray40") +
         # ylab(expression(paste(Ratio~of~"NO"["3"]^" -"~" : "~SRP~event~yield))) + 
-        ylab(expression(atop(LOG~Molar~ratio~of~NO[3]^-{}~":"~SRP~yield, "for"~each~event))) +
+        ylab(expression(atop(log~Molar~ratio~of~NO[3]^-{}~":"~SRP~yield, "for"~each~event))) +
         xlab("Event water yield (mm)") +
         # scale_y_continuous(limits = c(0, 1300), breaks=seq(0, 1200, 300)) +
         # facet_wrap(~site, labeller = labeller(var = labels, site = labels2)) +
@@ -202,7 +193,7 @@
      ggsave("Plots/SOM_hf_ratiosBYWaterYield.png", width = 4, height = 4, units = "in", dpi = 150)
      
     # Look at how clusters map onto HI and FI
-    som_hf_4C_14V %>% 
+    hford %>% 
       left_join(hyst, by = c("site", "event_start")) %>%
       pivot_longer(cols = c(FI_NO3, FI_SRP, HI_NO3_mean, HI_SRP_mean), names_to = "var", values_to = "value") %>% 
       ggplot(aes(x = cluster, y = value, group = cluster)) +
@@ -212,7 +203,7 @@
     
     # Nitrate
     pl_hifi_no3 <- 
-      som_hf_4C_14V %>% 
+      hford %>% 
       left_join(hyst, by = c("site", "event_start")) %>%
       ggplot() +
       geom_hline(yintercept = 0, linetype = "dashed") + 
@@ -235,7 +226,7 @@
     
     # SRP
     pl_hifi_srp <- 
-      som_hf_4C_14V %>% 
+      hford %>% 
       left_join(hyst, by = c("site", "event_start")) %>%
       ggplot() +
       geom_hline(yintercept = 0, linetype = "dashed") + 
@@ -271,10 +262,9 @@
   
   
      
-  # WADE - 4 clusters, 15 variables
+  # WADE
     # Look at seasonal differences by cluster
-    som_wd_4C_15V %>% 
-      full_join(wd_input_z, by = c("site", "event_start")) %>% 
+    wade %>% 
       group_by(cluster, season) %>% 
       tally() %>% 
       # Order the seasons
@@ -292,16 +282,19 @@
 
     # Look at z-scores by cluster
     # Plotting median z-scores
-    som_wd_4C_15V %>% 
-      full_join(wd_input_z, by = c("site", "event_start")) %>% 
-      pivot_longer(cols = rain_event_total_mm:VWC_mean_preEvent_6, names_to = "var", values_to = "value") %>% 
+    wade %>% 
+      # Rename clusters
+      mutate(cluster = paste("Cluster", cluster, sep = " ")) %>% 
+      # Calculate z-scores for each independent variable
+      mutate_at(vars(c(DOY:ncol(.))),
+              .funs = list(~ (. - mean(., na.rm = T)) / sd(., na.rm = T))) %>%
+      pivot_longer(cols = DOY:ncol(.), names_to = "var", values_to = "value") %>% 
       group_by(cluster, var) %>% 
       summarize(median = median(value)) %>% 
-      ggplot(aes(x = reorder_within(x = var, by = abs(median), within = cluster), y = median)) +
+      ggplot(aes(x =  var, y = median)) +
         # Must use scales = "free" when using the reordering functions
-        facet_wrap(~cluster, scales = "free", labeller=labeller(cluster = labels)) +
+        facet_wrap(~cluster) +
         geom_bar(stat = "identity") +
-        scale_x_reordered() +
         ylab("Median z-scores") +
         coord_flip() +
         theme_bw() +
@@ -310,18 +303,21 @@
     ggsave("Plots/SOM_wd_zScoresByCluster.png", width = 6, height = 6, units = "in", dpi = 150)
     
     # Plotting mean z-scores + SE
-    som_wd_4C_15V %>% 
-      full_join(wd_input_z, by = c("site", "event_start")) %>% 
-      pivot_longer(cols = rain_event_total_mm:VWC_mean_preEvent_6, names_to = "var", values_to = "value") %>% 
+    wade %>% 
+      # Rename clusters
+      mutate(cluster = paste("Cluster", cluster, sep = " ")) %>% 
+      # Calculate z-scores for each independent variable
+      mutate_at(vars(c(DOY:ncol(.))),
+              .funs = list(~ (. - mean(., na.rm = T)) / sd(., na.rm = T))) %>%
+      pivot_longer(cols = DOY:ncol(.), names_to = "var", values_to = "value") %>% 
       group_by(cluster, var) %>% 
       summarize(mean = mean(value),
                 SE = sd(value)/sqrt(length(!is.na(value)))) %>% 
-      ggplot(aes(x = reorder_within(x = var, by = abs(mean), within = cluster), y = mean)) +
+      ggplot(aes(x =  var, y = mean)) +
         # Must use scales = "free" when using the reordering functions
-        facet_wrap(~cluster, scales = "free", labeller=labeller(cluster = labels)) +
+        facet_wrap(~cluster) +
         geom_bar(stat = "identity", position = position_dodge()) +
         geom_errorbar(aes(ymin = mean - SE, ymax = mean + SE), width = 0.2, position = position_dodge(0.9)) +
-        scale_x_reordered() +
         ylab("Median z-scores") +
         coord_flip() +
         theme_bw() +
@@ -329,17 +325,17 @@
               axis.title.y = element_blank())
     
     # Plot timeline of event yields & ratios colored by cluster number
-    som_wd_4C_15V %>% 
-      left_join(yieldsAndRatios, by = c("site", "event_start")) %>% 
-      pivot_longer(cols = NO3_kg_km2:event_NO3_SRP, names_to = "var", values_to = "value") %>% 
-      mutate(var = factor(var, levels = c("NO3_kg_km2", "SRP_kg_km2", "event_NO3_SRP"))) %>% 
+    wade %>% 
+      mutate(log_event_NO3_SRP = log(event_NO3_SRP)) %>% 
+      pivot_longer(cols = c(NO3_kg_km2, SRP_kg_km2, log_event_NO3_SRP, turb_kg_km2), names_to = "var", values_to = "value") %>% 
+      mutate(var = factor(var, levels = c("NO3_kg_km2", "SRP_kg_km2", "log_event_NO3_SRP", "turb_kg_km2"))) %>% 
       # Add leading zero to single digit months and days
       mutate(year = year(event_start),
              month = str_pad(month(event_start), 2, pad = 0),
              day = str_pad(day(event_start), 2, pad = 0),
              month_day = paste(month, "/", day, sep = "")) %>%
       ggplot(aes(x = month_day, y = value, fill = as.factor(cluster))) +
-        facet_wrap(var ~ year, scales = "free") +
+        facet_wrap(var ~ year, scales = "free", ncol = 3) +
         geom_bar(stat = "identity") +
         scale_fill_manual(name = "Cluster",
                           values = c("#009E73", "#D55E00", "#CC79A7", "#0072B2")) +      
@@ -351,8 +347,7 @@
     
     
     # Plot NO3:SRP yield ratios against water yield
-    som_wd_4C_15V %>% 
-      left_join(yieldsAndRatios, by = c("site", "event_start")) %>%
+    wade %>% 
       ggplot(aes(x = q_mm, y = event_NO3_SRP, color = as.factor(cluster))) +
         geom_point(size = 2, stroke = 0.75, alpha = 0.8) +
         #geom_smooth(method=lm, se=TRUE) +
@@ -370,7 +365,7 @@
      
     # Nitrate
     pl_hifi_no3_2 <- 
-      som_wd_4C_15V %>% 
+      wade %>% 
       left_join(hyst, by = c("site", "event_start")) %>%
       ggplot() +
       geom_hline(yintercept = 0, linetype = "dashed") + 
@@ -393,7 +388,7 @@
     
     # SRP
     pl_hifi_srp_2 <- 
-      som_wd_4C_15V %>% 
+      wade %>% 
       left_join(hyst, by = c("site", "event_start")) %>%
       ggplot() +
       geom_hline(yintercept = 0, linetype = "dashed") + 
