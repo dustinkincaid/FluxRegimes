@@ -325,10 +325,32 @@
              ((transect == "WD" | transect == "WW") & (timestamp >= ymd_hms("2019-03-01 00:00:00", tz = "Etc/GMT+4") & timestamp <= ymd_hms("2019-11-02 23:59:59", tz = "Etc/GMT+4")))
            )
   
+  # Replace missing HW P1 30cm data w/ HD P1 30cm data
+  soil_na <- soils_all %>% 
+    filter((transect == "HW" & pit == 1 & depth == 30) | (transect == "HD" & pit == 1 & depth == 30)) %>% 
+    select(-c(DO, Redox)) %>% 
+    pivot_wider(names_from = c(transect, pit, depth), values_from = c(SoilTemp, VWC)) %>% 
+    mutate(SoilTemp_HW_1_30 = ifelse(is.na(SoilTemp_HW_1_30), SoilTemp_HD_1_30, SoilTemp_HW_1_30),
+           VWC_HW_1_30 = ifelse(is.na(VWC_HW_1_30), VWC_HD_1_30, VWC_HW_1_30)) %>% 
+    pivot_longer(cols = contains("30"), names_to = "ID", values_to = "val") %>% 
+    separate(ID, c("var", "transect", "pit", "depth")) %>% 
+    type_convert() %>% 
+    pivot_wider(names_from = var, values_from = val) %>% 
+    rename(SoilTemp2 = SoilTemp, VWC2 = VWC)
+  
+  # Join these new data to soils_all
+  soils_all <- full_join(soils_all, soil_na) %>% 
+    mutate(SoilTemp = ifelse(is.na(SoilTemp), SoilTemp2, SoilTemp),
+           VWC = ifelse(is.na(VWC), VWC2, VWC)) %>% 
+    select(-c(SoilTemp2, VWC2)) %>% 
+    select(site, timestamp, transect, pit, depth, everything())
+  
   # test2 <- test %>% filter(transect == "WW")
   # test3 <- test %>% group_by(transect, pit, year(timestamp)) %>% 
   #   summarize(first = first(timestamp),
   #             last = last(timestamp))
+  
+  rm(soil_na)
   
 
 # STREAM DATA: s::can nutrients & YSI stream temp and turbidity ----
@@ -424,8 +446,55 @@
   stream <- full_join(stream, q_all, by = c("site", "timestamp")) %>% 
     filter(timestamp >= ymd_hms("2017-07-01 00:00:00", tz = "Etc/GMT+4"))
   
-  # nodat <- stream %>% filter(site == "Wade" & timestamp >= ymd_hms("2018-06-14 00:00:00", tz = "Etc/GMT+4"))
-
+  # Assessing where missing data gaps lead to NAs for yield estimates in 'allvar_X' dfs at end of script
+  # nodat <- stream %>% filter(site == "Wade" & timestamp >= ymd_hms("2017-11-07 05:30:00", tz = "Etc/GMT+4"))
+  #   
+  # stream %>% 
+  #   filter(site == "Wade" & (timestamp >= ymd_hms("2018-10-11 07:15:00", tz = "Etc/GMT+4") & timestamp <= ymd_hms("2018-10-12 20:30:00", tz = "Etc/GMT+4"))) %>% 
+  #   pivot_longer(cols = c(q_cms, NO3_mgNL, SRP_mgPL), names_to = "var", values_to = "val") %>% 
+  #   ggplot(aes(x = timestamp, y = val)) +
+  #   facet_wrap(~var, scales = "free_y", ncol = 1) +
+  #   geom_point()
+  
+  # Interpolate missing solute data where fit (based on visual inspection of NO3, SRP, and Q time series)
+  # Will use these for the yield estimates, and only a select few for hysteresis
+  stream_int <- stream %>% 
+    filter((site == "Hungerford" & (timestamp >= ymd_hms("2018-04-26 04:15:00", tz = "Etc/GMT+4") & timestamp <= ymd_hms("2018-04-26 13:45:00", tz = "Etc/GMT+4"))) |
+             (site == "Hungerford" & (timestamp >= ymd_hms("2018-11-14 10:45:00", tz = "Etc/GMT+4") & timestamp <= ymd_hms("2018-11-14 12:15:00", tz = "Etc/GMT+4"))) |
+             (site == "Wade" & (timestamp >= ymd_hms("2017-08-05 13:00:00", tz = "Etc/GMT+4") & timestamp <= ymd_hms("2017-08-05 15:45:00", tz = "Etc/GMT+4"))) |
+             (site == "Wade" & (timestamp >= ymd_hms("2017-10-26 20:45:00", tz = "Etc/GMT+4") & timestamp <= ymd_hms("2017-10-26 22:45:00", tz = "Etc/GMT+4"))) |
+             (site == "Wade" & (timestamp >= ymd_hms("2017-10-27 06:30:00", tz = "Etc/GMT+4") & timestamp <= ymd_hms("2017-10-28 16:30:00", tz = "Etc/GMT+4"))) |
+             (site == "Wade" & (timestamp >= ymd_hms("2017-11-07 05:30:00", tz = "Etc/GMT+4") & timestamp <= ymd_hms("2017-11-07 08:45:00", tz = "Etc/GMT+4"))) |
+             (site == "Wade" & (timestamp >= ymd_hms("2017-11-07 16:45:00", tz = "Etc/GMT+4") & timestamp <= ymd_hms("2017-11-08 11:15:00", tz = "Etc/GMT+4"))) |
+             (site == "Wade" & (timestamp >= ymd_hms("2018-10-10 11:15:00", tz = "Etc/GMT+4") & timestamp <= ymd_hms("2018-10-11 09:15:00", tz = "Etc/GMT+4"))) |
+             (site == "Wade" & (timestamp >= ymd_hms("2019-04-03 14:45:00", tz = "Etc/GMT+4") & timestamp <= ymd_hms("2019-04-03 16:45:00", tz = "Etc/GMT+4")))) %>% 
+    # Interpolate NAs using linear interpolation
+    arrange(site, timestamp) %>%
+    group_by(site, year(timestamp)) %>%
+    mutate_at(vars(c(NO3_mgNL:turb)),
+              list(~ na.approx(., x = timestamp, xout = timestamp, na.rm = FALSE))) %>%
+    ungroup() %>% 
+    select(site, timestamp, NO3_mgNL:q_cms) %>% 
+    pivot_longer(cols = NO3_mgNL:q_cms, names_to = "var", values_to = "val_int")
+  
+  # OK interpolated time series for hysteresis calcs (done in another script)
+    # filter((site == "Hungerford" & (timestamp >= ymd_hms("2018-11-14 10:45:00", tz = "Etc/GMT+4") & timestamp <= ymd_hms("2018-11-14 12:15:00", tz = "Etc/GMT+4"))) |
+    #          (site == "Wade" & (timestamp >= ymd_hms("2017-08-05 13:00:00", tz = "Etc/GMT+4") & timestamp <= ymd_hms("2017-08-05 15:45:00", tz = "Etc/GMT+4"))) |
+    #          (site == "Wade" & (timestamp >= ymd_hms("2017-11-07 05:30:00", tz = "Etc/GMT+4") & timestamp <= ymd_hms("2017-11-07 08:45:00", tz = "Etc/GMT+4"))) |
+    #          (site == "Wade" & (timestamp >= ymd_hms("2017-11-07 16:45:00", tz = "Etc/GMT+4") & timestamp <= ymd_hms("2017-11-08 11:15:00", tz = "Etc/GMT+4"))) |
+    #          (site == "Wade" & (timestamp >= ymd_hms("2018-10-10 11:15:00", tz = "Etc/GMT+4") & timestamp <= ymd_hms("2018-10-11 09:15:00", tz = "Etc/GMT+4"))) |
+    #          (site == "Wade" & (timestamp >= ymd_hms("2019-04-03 14:45:00", tz = "Etc/GMT+4") & timestamp <= ymd_hms("2019-04-03 16:45:00", tz = "Etc/GMT+4")))) %>%   
+    
+  # Join these interpolated data to the stream df
+  stream <- stream %>% 
+    pivot_longer(cols = NO3_mgNL:q_cms, names_to = "var", values_to = "val") %>% 
+    full_join(stream_int, by = c("site", "timestamp", "var")) %>% 
+    mutate(val = ifelse(is.na(val), val_int, val)) %>% 
+    select(-val_int) %>% 
+    pivot_wider(names_from = "var", values_from = "val")
+  
+  rm(stream_int)
+  
     
 # GW LEVEL DATA ----
   # Data are water table depth below ground surface
@@ -1184,29 +1253,10 @@
     # Rearrange columns
     select(site, event_start, DOY, season, NO3_kg_km2, SRP_kg_km2, event_NO3_SRP, turb_kg_km2, everything())
   
-  # allvars <- full_join(rain_mets, q_event_max_delta, by = c("site", "event_start")) %>% 
-  #   full_join(q_event_dQRate, by = c("site", "event_start")) %>%
-  #   full_join(q_preEvent_means, by = c("site", "event_start")) %>% 
-  #   full_join(stream_eventYields, by = c("site", "event_start")) %>% 
-  #   full_join(stream_means, by = c("site", "event_start")) %>% 
-  #   full_join(turb_event_max, by = c("site", "event_start")) %>% 
-  #   full_join(gw_event_max_delta, by = c("site", "event_start")) %>% 
-  #   full_join(gw_preEvent_means, by = c("site", "event_start")) %>%   
-  #   full_join(events_all %>% 
-  #               select(site, event_start, time_sinceLastEvent, multipeak) %>% 
-  #               mutate(time_sinceLastEvent = as.numeric(time_sinceLastEvent)), by = c("site", "event_start")) %>% 
-  #   # Add hourly PET
-  #   mutate(timestamp_hour = floor_date(event_start, unit = "1 hour")) %>%   
-  #   left_join(PET %>% rename(timestamp_hour = timestamp), by = c("site", "timestamp_hour")) %>% 
-  #   select(-timestamp_hour) %>% 
-  #   # Add day of year
-  #   mutate(DOY = yday(event_start)) %>% 
-  #   # Shed rows with no event start
-  #   filter(!is.na(event_start)) %>% 
-  #   # Let's just look at events where all variables are complete
-  #   # na.omit %>% 
-  #   # Rearrange columns
-  #   select(site, event_start, DOY, season, everything())  
+# Which events are missing air temp data?
+  na_airT <- allvars %>% 
+    filter(is.na(airT_1d)) %>% 
+    select(site, event_start, airT_1d, airT_4d)
   
 
 # Split the allvars into separate dfs for Hungerford and Wade & join the soil variables
@@ -1215,13 +1265,22 @@ allvars_hford <- allvars %>% filter(site == "Hungerford") %>%
   select(-c(ends_with(c("well2", "well4a")), contains(c("WW"))))
 allvars_wade <- allvars %>% filter(site == "Wade") %>% 
   select(-c(ends_with("well7"), contains(c("HW"))))
+
+# Look at missing values
+na_hford <-
+  allvars_hford %>%
+  mutate(multipeak = ifelse(multipeak == "NO", 0, 1)) %>%
+  pivot_longer(cols = NO3_kg_km2:ncol(.), names_to = "var", values_to = "val") %>%
+  filter(is.na(val)) %>%
+  mutate(val = ifelse(is.na(val), 100, val)) %>% 
+  pivot_wider(names_from = var, values_from = val)
   
 # # Look at distributions
-#   allvars_hford %>% 
-#     pivot_longer(cols = -c(site:season, multipeak), names_to = "var", values_to = "value") %>% 
-#     ggplot(aes(value)) +
-#     facet_wrap(~var, scales = "free") +
-#     geom_histogram()
+  # allvars_hford %>%
+  #   pivot_longer(cols = -c(site:season, multipeak), names_to = "var", values_to = "value") %>%
+  #   ggplot(aes(value)) +
+  #   facet_wrap(~var, scales = "free") +
+  #   geom_histogram()
   
   # Checked on high turb_1d value for 2019-03-30 15:45:00	event and the turb timeseries for that time period looks OK
   
