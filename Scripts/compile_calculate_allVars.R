@@ -220,8 +220,61 @@
       mutate(precip_mm = replace_na(precip_mm, 0)) %>% 
       select(-year)
     
- 
+  # Global Historical Climatology Network (GHCN) daily air temperatures
+    # Downloaded on 2020-11-23 from https://www.ncdc.noaa.gov/cdo-web/search?datasetid=GHCND
+    # PRCP = Precipitation (tenths of mm)
+    # SNOW = Snowfall (mm)
+    # SNWD = Snow depth (mm)
+    # TMAX = Maximum temperature (tenths of degrees C)
+    # TMIN = Minimum temperature (tenths of degrees C)
+    ghcn <- read_csv("Data/GHCND_2020-11-24.csv") %>% 
+      # Make column names lower case
+      rename_all(tolower) %>% 
+      # Rename station name to site
+      rename(site = name) %>% 
+      # mutate(site = ifelse(site == "ENOSBURG FALLS 2, VT US", "Hungerford",
+      #                          ifelse(site == "JOHNSON 2 N, VT US", "Wade", "EssexJunc"))) %>% 
+      mutate(site = ifelse(site == "ENOSBURG FALLS 2, VT US", "EN",
+                               ifelse(site == "JOHNSON 2 N, VT US", "JO", "EJ"))) %>%
+      # Calculate an alternative temp average of t_max and t_min, because Enosburg & Johnson data don't have daily temp average included, just max and min
+      mutate(tavg = ifelse(is.na(tavg), ((tmax + tmin)/2), tavg))
     
+    # Separate dfs into one for temp and one for precip
+    ghcn_t <- ghcn %>% 
+      select(site, date, tavg) %>% 
+      # Spread wide
+      pivot_wider(names_from = site, values_from = tavg)
+    
+    ghcn_pr <- ghcn %>% 
+      select(site, date, rain = prcp, snow, snwd) %>% 
+      # Spread wide
+      pivot_wider(names_from = site, values_from = c(rain, snow, snwd))
+
+    
+    # There are still missing values for daily means, so let's calc daily means from our MET data
+    met_daily <- met_all %>% 
+      group_by(site, date(timestamp)) %>% 
+      summarize(across(temp_C:dewPoint, ~mean(., na.rm = TRUE))) %>% 
+      rename(date = `date(timestamp)`)
+    
+    met_daily_t <-
+      full_join(met_daily %>% select(site, date, temp_C), ghcn_t) %>% 
+      # Fill temp_C NA with tavg from appropriate site
+      mutate(temp_C = ifelse(site == "Hungerford" & is.na(temp_C), (EN + EJ)/2, temp_C)) %>% 
+      mutate(temp_C = ifelse(site == "Hungerford" & is.na(temp_C), EJ, temp_C)) %>% 
+      mutate(temp_C = ifelse(site == "Wade" & is.na(temp_C), JO, temp_C)) %>% 
+      mutate(temp_C = ifelse(site == "Wade" & is.na(temp_C), EJ-2, temp_C)) %>% 
+      # Calculate 1- and 4-day mean temps & 1- and 2-day cumulative precip
+      group_by(site) %>% 
+      mutate(airT_est_1d = rollmean(temp_C, k = 1, fill = NA, align = "right"),
+             airT_est_4d = rollmean(temp_C, k = 4, fill = NA, align = "right")) %>% 
+      select(-c(EJ, JO, EN))
+    
+    
+     # rain_est_1d = rollapply(prcp, width = 1, sum, fill = NA, align = "right"),
+     # rain_est_2d = rollapply(prcp, width = 2, sum, fill = NA, align = "right"))
+    
+ 
 
 # POTENTIAL ET ----
   PET <- read_csv("../../General Site Data/PotentialET_2017-2019_Wade_Hungerford.csv") %>% 
@@ -597,7 +650,6 @@
 # Calculate rain metrics ----
   # Total rain amount for each event (rain start to event end)
     # First add event data (rain start to event end) to MET data using an overlap join
-      # What to do about 
       # Remove events that don't have a rain start
       events_withRain <- events_all %>% filter(!is.na(rain_start))
       # Convert dfs to data.tables
@@ -625,8 +677,10 @@
       group_by(site, event_start) %>%
       mutate(rain_event_hrs = as.numeric(difftime(max(timestamp), min(timestamp), units = "hours"))) %>% 
       select(site, event_start, rain_event_hrs) %>% 
-      distinct()
-    
+      distinct() %>% 
+      # Deal with events where rain was only recorded once, thus rain duration is 0 as calculated above
+      mutate(rain_event_hrs = ifelse(rain_event_hrs == 0, 5/60, rain_event_hrs))
+      
   # Join those 2 to see where I'm missing values
     # It's due to the events that have no rain start associated with them
     rain_mets <- full_join(rain_event_total, rain_event_duration, by = c("site", "event_start"))
@@ -675,11 +729,11 @@
     
   # Total rain for 1-4days, 7-days, 14-days, and 30-days prior to event (prior to rain start)
   # Only considering events with a rain_start, so we'll use events_withRain df from above
-    # Join rain_start to the met_all data
+    # For events with rain: join rain_start to the met_all data
     events_withRain[, timestamp := rain_start]
     setkey(met_all, site, timestamp)
     setkey(events_withRain, site, timestamp)
-    comb_met <- events_withRain[met_all, roll = 1] %>% 
+    comb_met_withRain <- events_withRain[met_all, roll = 1] %>% 
       mutate(year = year(timestamp)) %>% 
       arrange(site, timestamp)
     events_withRain[, "timestamp" := NULL]    
@@ -688,7 +742,7 @@
     
     # Calculate cumulative pre-event rain totals
     # 288 rows 5 min/row = 1 day, so 288 rows/day
-    rain_preEvent_totals <- setDT(comb_met)[, c("rain_1d", "rain_2d", "rain_3d", "rain_4d", "rain_7d", "rain_14d", "rain_30d") 
+    rain_preEvent_totals1 <- setDT(comb_met_withRain)[, c("rain_1d", "rain_2d", "rain_3d", "rain_4d", "rain_7d", "rain_14d", "rain_30d") 
                       := list(frollsum(lag(precip_mm, n = 1), n = 288*1, align = "right", fill = NA, na.rm = T),
                               frollsum(lag(precip_mm, n = 1), n = 288*2, align = "right", fill = NA, na.rm = T),
                               frollsum(lag(precip_mm, n = 1), n = 288*3, align = "right", fill = NA, na.rm = T),
@@ -697,6 +751,37 @@
                               frollsum(lag(precip_mm, n = 1), n = 288*14, align = "right", fill = NA, na.rm = T),
                               frollsum(lag(precip_mm, n = 1), n = 288*30, align = "right", fill = NA, na.rm = T)),
                               by = site][!is.na(rain_start)][, c("site", "event_start", "rain_1d", "rain_2d", "rain_3d", "rain_4d", "rain_7d", "rain_14d", "rain_30d")]
+    
+    # For events w/o rain: join event_start to the met_all data
+    setDT(events_all)
+    events_all[, timestamp := event_start]
+    setkey(met_all, site, timestamp)
+    setkey(events_all, site, timestamp)
+    comb_met_all <- events_all[met_all, roll = 1] %>% 
+      mutate(year = year(timestamp)) %>% 
+      arrange(site, timestamp)
+    events_all[, "timestamp" := NULL]    
+    
+    # Calculate cumulative pre-event rain totals
+    # 288 rows 5 min/row = 1 day, so 288 rows/day
+    rain_preEvent_totals2 <- setDT(comb_met_all)[, c("rain_1d", "rain_2d", "rain_3d", "rain_4d", "rain_7d", "rain_14d", "rain_30d") 
+                      := list(frollsum(lag(precip_mm, n = 1), n = 288*1, align = "right", fill = NA, na.rm = T),
+                              frollsum(lag(precip_mm, n = 1), n = 288*2, align = "right", fill = NA, na.rm = T),
+                              frollsum(lag(precip_mm, n = 1), n = 288*3, align = "right", fill = NA, na.rm = T),
+                              frollsum(lag(precip_mm, n = 1), n = 288*4, align = "right", fill = NA, na.rm = T),
+                              frollsum(lag(precip_mm, n = 1), n = 288*7, align = "right", fill = NA, na.rm = T),
+                              frollsum(lag(precip_mm, n = 1), n = 288*14, align = "right", fill = NA, na.rm = T),
+                              frollsum(lag(precip_mm, n = 1), n = 288*30, align = "right", fill = NA, na.rm = T)),
+                              by = site][!is.na(event_start)][, c("site", "rain_start", "event_start", 
+                                                                  "rain_1d", "rain_2d", "rain_3d", "rain_4d", "rain_7d", "rain_14d", "rain_30d")][is.na(rain_start)]
+    
+    # Bind these two together
+    rain_preEvent_totals <-
+      bind_rows(rain_preEvent_totals1, rain_preEvent_totals2) %>% 
+      arrange(site, event_start) %>% 
+      select(-rain_start)
+    
+    rm(rain_preEvent_totals1, rain_preEvent_totals2)
     
     # Slower alternative method
     # rain_preEvent_totals <- comb_met %>%
@@ -753,37 +838,79 @@
       
     # First, calculate the amount of rain received each day (24 hrs) prior to the event for 4 days
     # 288 rows 5 min/row = 1 day, so 288 rows/day
-    rain_API <- setDT(comb_met)[, c("rain_day1", "rain_day2", "rain_day3", "rain_day4") 
+    # First for events with rain_start
+    rain_API1 <- setDT(comb_met_withRain)[, c("rain_day1", "rain_day2", "rain_day3", "rain_day4") 
                       := list(frollsum(lag(precip_mm, n = 1+288*0), n = 288, align = "right", fill = NA, na.rm = T),
                               frollsum(lag(precip_mm, n = 1+288*1), n = 288, align = "right", fill = NA, na.rm = T),
                               frollsum(lag(precip_mm, n = 1+288*2), n = 288, align = "right", fill = NA, na.rm = T),
                               frollsum(lag(precip_mm, n = 1+288*3), n = 288, align = "right", fill = NA, na.rm = T)),
                               by = site][!is.na(rain_start)][, c("site", "event_start", "rain_day1", "rain_day2", "rain_day3", "rain_day4")]
     
-  # Let's join all the rain metrics into one df AND calculate the final 4-day API
+    # Then for events without rain_start
+    rain_API2 <- setDT(comb_met_all)[, c("rain_day1", "rain_day2", "rain_day3", "rain_day4") 
+                      := list(frollsum(lag(precip_mm, n = 1+288*0), n = 288, align = "right", fill = NA, na.rm = T),
+                              frollsum(lag(precip_mm, n = 1+288*1), n = 288, align = "right", fill = NA, na.rm = T),
+                              frollsum(lag(precip_mm, n = 1+288*2), n = 288, align = "right", fill = NA, na.rm = T),
+                              frollsum(lag(precip_mm, n = 1+288*3), n = 288, align = "right", fill = NA, na.rm = T)),
+                              by = site][!is.na(event_start)][, c("site","rain_start", "event_start", "rain_day1", "rain_day2", "rain_day3", "rain_day4")][is.na(rain_start)]
+    
+    # Bind these two together
+    rain_API <-
+      bind_rows(rain_API1, rain_API2) %>% 
+      arrange(site, event_start) %>% 
+      select(-rain_start)
+    
+    rm(rain_API1, rain_API2)
+    
+  # Let's join all the rain metrics into one df 
     rain_mets <- full_join(rain_event_total, rain_event_duration, by = c("site", "event_start")) %>% 
       full_join(rain_event_intensity_max, by = c("site", "event_start")) %>% 
       full_join(rain_event_intensity_mean, by = c("site", "event_start")) %>%
       full_join(rain_preEvent_totals, by = c("site", "event_start")) %>%    
       full_join(rain_API, by = c("site", "event_start")) %>% 
+      # Fix situation where rain intensity mean is NA, but all other values > 0
+      mutate(rain_int_mmPERmin_mean = ifelse(is.na(rain_int_mmPERmin_mean) & rain_event_total_mm > 0, rain_int_mmPERmin_max, rain_int_mmPERmin_mean))
+
+  # Which events are missing a rain_start/event rain data
+    # 24 events w/ no rain_start are still missing API_4d data <- need to check on this!
+    # Where rain is not noted at the other GHCN stations, assign 0 to the appropriate vars
+    na_rain <- rain_mets %>% 
+      filter(is.na(rain_event_total_mm)) %>% 
+      mutate(date = date(event_start)) %>% 
+      select(site, event_start, date, contains("rain")) %>% 
+      left_join(ghcn_pr) %>% 
+      mutate(rain_event_total_mm_2 = ifelse(is.na(rain_event_total_mm) & rain_EN == 0, 0, rain_event_total_mm),
+             rain_event_hrs_2 = ifelse(is.na(rain_event_hrs) & rain_EN == 0, 0, rain_event_hrs),
+             rain_int_mmPERmin_max_2 = ifelse(is.na(rain_int_mmPERmin_max) & rain_EN == 0, 0, rain_int_mmPERmin_max),
+             rain_int_mmPERmin_mean_2 = ifelse(is.na(rain_int_mmPERmin_mean) & rain_EN == 0, 0, rain_int_mmPERmin_mean)) %>% 
+      select(site, event_start, ends_with("_2"))
+    
+  # Add these data to allvars AND calculate the final 4-day API
+    rain_mets <- full_join(rain_mets, na_rain) %>% 
+      mutate(rain_event_total_mm = ifelse(is.na(rain_event_total_mm), rain_event_total_mm_2, rain_event_total_mm),
+             rain_event_hrs = ifelse(is.na(rain_event_hrs), rain_event_hrs_2, rain_event_hrs),
+             rain_int_mmPERmin_max = ifelse(is.na(rain_int_mmPERmin_max), rain_int_mmPERmin_max_2, rain_int_mmPERmin_max),
+             rain_int_mmPERmin_mean = ifelse(is.na(rain_int_mmPERmin_mean), rain_int_mmPERmin_mean_2, rain_int_mmPERmin_mean)) %>% 
+      select(-c(ends_with("_2"))) %>% 
       # 4-day API calc
       mutate(API_4d = rain_event_total_mm + k^1*rain_day1 + k^2*rain_day2 + k^3*rain_day3 + k^4*rain_day4) %>% 
-      select(-c(rain_day1, rain_day2, rain_day3, rain_day4))
+      select(-c(rain_day1, rain_day2, rain_day3, rain_day4)) %>% 
+      arrange(site, event_start)
     
     rm(rain_event_total, rain_event_duration, rain_event_intensity_max, rain_event_intensity_mean, rain_preEvent_totals, rain_API, rain_start_end)
     
 # Calculate MET metrics ----
  # 1-day and 3-day means  
   # 288 rows 5 min/row = 1 day, so 288 rows/day
-  airT_means <- setDT(comb_met)[, c("airT_1d", "airT_4d") 
+  airT_means <- setDT(comb_met_all)[, c("airT_1d", "airT_4d") 
                     := list(frollmean(lag(temp_C, n = 1), n = 288*1, align = "right", fill = NA, na.rm = T),
                             frollmean(lag(temp_C, n = 1), n = 288*4, align = "right", fill = NA, na.rm = T)),
                             by = site][!is.na(event_start)][, c("site", "event_start", "airT_1d", "airT_4d")]
-  solarRad_means <- setDT(comb_met)[, c("solarRad_1d", "solarRad_4d") 
+  solarRad_means <- setDT(comb_met_all)[, c("solarRad_1d", "solarRad_4d") 
                     := list(frollmean(lag(solarRad_wm2, n = 1), n = 288*1, align = "right", fill = NA, na.rm = T),
                             frollmean(lag(solarRad_wm2, n = 1), n = 288*4, align = "right", fill = NA, na.rm = T)),
                             by = site][!is.na(event_start)][, c("site", "event_start", "solarRad_1d", "solarRad_4d")]
-  dewPoint_means <- setDT(comb_met)[, c("dewPoint_1d", "dewPoint_4d") 
+  dewPoint_means <- setDT(comb_met_all)[, c("dewPoint_1d", "dewPoint_4d") 
                     := list(frollmean(lag(dewPoint, n = 1), n = 288*1, align = "right", fill = NA, na.rm = T),
                             frollmean(lag(dewPoint, n = 1), n = 288*4, align = "right", fill = NA, na.rm = T)),
                             by = site][!is.na(event_start)][, c("site", "event_start", "dewPoint_1d", "dewPoint_4d")]
@@ -791,8 +918,16 @@
   met_mets <- full_join(airT_means, solarRad_means, by = c("site", "event_start")) %>% 
     full_join(dewPoint_means, by = c("site", "event_start"))
   
-  rm(comb_met, met_all, airT_means, solarRad_means, dewPoint_means)
+  rm(comb_met_all, comb_met_withRain, met_all, airT_means, solarRad_means, dewPoint_means)
 
+  # Fill in missing airT values with those estimated using GHCN data
+  met_mets <-
+    met_mets %>% 
+    mutate(date = date(event_start)) %>% 
+    left_join(met_daily_t) %>% 
+    mutate(airT_1d = ifelse(is.na(airT_1d), airT_est_1d, airT_1d),
+           airT_4d = ifelse(is.na(airT_4d), airT_est_4d, airT_4d)) %>% 
+    select(-c(date, temp_C, airT_est_1d, airT_est_4d))
   
 # Calculate discharge metrics ----
   # Peak discharge & delta Q (change in Q from beginning to to peak Q)
@@ -1248,15 +1383,20 @@
     select(-timestamp_hour) %>% 
     # Add day of year
     mutate(DOY = yday(event_start)) %>% 
+    # Add a column with difference b/w air temp and soil temp
+    mutate(diff_airT_soilT = airT_1d - SoilTemp_pre_dry_15cm) %>% 
     # Shed rows with no event start
     filter(!is.na(event_start)) %>% 
     # Rearrange columns
     select(site, event_start, DOY, season, NO3_kg_km2, SRP_kg_km2, event_NO3_SRP, turb_kg_km2, everything())
   
-# Which events are missing air temp data?
-  na_airT <- allvars %>% 
-    filter(is.na(airT_1d)) %>% 
-    select(site, event_start, airT_1d, airT_4d)
+# Which events are still missing air temp data?
+  # na_airT <- allvars %>% 
+  #   filter(is.na(airT_1d))
+  
+# Which events are missing a rain_start/event rain data
+  # na_rain <- allvars %>% 
+  #   filter(is.na(rain_event_total_mm))
   
 
 # Split the allvars into separate dfs for Hungerford and Wade & join the soil variables
@@ -1267,13 +1407,13 @@ allvars_wade <- allvars %>% filter(site == "Wade") %>%
   select(-c(ends_with("well7"), contains(c("HW"))))
 
 # Look at missing values
-na_hford <-
-  allvars_hford %>%
-  mutate(multipeak = ifelse(multipeak == "NO", 0, 1)) %>%
-  pivot_longer(cols = NO3_kg_km2:ncol(.), names_to = "var", values_to = "val") %>%
-  filter(is.na(val)) %>%
-  mutate(val = ifelse(is.na(val), 100, val)) %>% 
-  pivot_wider(names_from = var, values_from = val)
+# na_hford <-
+#   allvars_hford %>%
+#   mutate(multipeak = ifelse(multipeak == "NO", 0, 1)) %>%
+#   pivot_longer(cols = NO3_kg_km2:ncol(.), names_to = "var", values_to = "val") %>%
+#   filter(is.na(val)) %>%
+#   mutate(val = ifelse(is.na(val), 100, val)) %>% 
+#   pivot_wider(names_from = var, values_from = val)
   
 # # Look at distributions
   # allvars_hford %>%
