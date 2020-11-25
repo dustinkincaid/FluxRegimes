@@ -500,7 +500,7 @@
     filter(timestamp >= ymd_hms("2017-07-01 00:00:00", tz = "Etc/GMT+4"))
   
   # Assessing where missing data gaps lead to NAs for yield estimates in 'allvar_X' dfs at end of script
-  # nodat <- stream %>% filter(site == "Wade" & timestamp >= ymd_hms("2017-11-07 05:30:00", tz = "Etc/GMT+4"))
+  # nodat <- stream %>% filter(site == "Wade" & timestamp >= ymd_hms("2019-04-03 14:45:00", tz = "Etc/GMT+4"))
   #   
   # stream %>% 
   #   filter(site == "Wade" & (timestamp >= ymd_hms("2018-10-11 07:15:00", tz = "Etc/GMT+4") & timestamp <= ymd_hms("2018-10-12 20:30:00", tz = "Etc/GMT+4"))) %>% 
