@@ -1271,6 +1271,23 @@
       # Choose which wells you want to keep
       select(site, event_start, matches("(1|2|3|4a|5|7)$"))
     
+  # For GW pre-event mean levels, let's calculate an average value across multiple wells to get a value more representative of the whole wet transect
+  # for 1- and 4-days prior to the event
+    # To do this we'll scale the values between 0 and 1 using range normalization
+    gw_preEvent_means_agg <- gw_preEvent_means %>% 
+      # Range normalize mean levels for each site and well_xd
+      group_by(site) %>% 
+      mutate_at(vars(c(gw_1d_well1:ncol(.))),
+                     .funs = list(~ (. - min(., na.rm = T)) / (max(., na.rm = T) - min(., na.rm = T)))) %>% 
+      ungroup() %>% 
+      # Calculate 1-day and 4-day pre event mean
+      pivot_longer(cols = starts_with("gw"), names_to = "var", values_to = "val") %>% 
+      mutate(days = str_sub(var, 4, 5)) %>% 
+      group_by(site, event_start, days) %>% 
+      summarize(mean = mean(val, na.rm = T)) %>% 
+      pivot_wider(names_from = days, values_from = mean) %>% 
+      rename(gw_1d_allWells = `1d`, gw_4d_allWells = `4d`)    
+    
     rm(comb_gw, comb_gw_long, gw_all)
       
 # ----    
@@ -1340,22 +1357,7 @@
   #   select(-c(transect))
   
   
-# For GW pre-event mean levels, let's calculate an average value across multiple wells to get a value more representative of the whole wet transect
-# for 1- and 4-days prior to the event
-  # To do this we'll scale the values between 0 and 1 using range normalization
-  gw_preEvent_means_agg <- gw_preEvent_means %>% 
-    # Range normalize mean levels for each site and well_xd
-    group_by(site) %>% 
-    mutate_at(vars(c(gw_1d_well1:ncol(.))),
-                   .funs = list(~ (. - min(., na.rm = T)) / (max(., na.rm = T) - min(., na.rm = T)))) %>% 
-    ungroup() %>% 
-    # Calculate 1-day and 4-day pre event mean
-    pivot_longer(cols = starts_with("gw"), names_to = "var", values_to = "val") %>% 
-    mutate(days = str_sub(var, 4, 5)) %>% 
-    group_by(site, event_start, days) %>% 
-    summarize(mean = mean(val, na.rm = T)) %>% 
-    pivot_wider(names_from = days, values_from = mean) %>% 
-    rename(gw_1d_allWells = `1d`, gw_4d_allWells = `4d`)
+
   
   
   # Play sound when done!
@@ -1389,6 +1391,10 @@
     filter(!is.na(event_start)) %>% 
     # Rearrange columns
     select(site, event_start, DOY, season, NO3_kg_km2, SRP_kg_km2, event_NO3_SRP, turb_kg_km2, everything())
+  
+  
+  
+  
   
 # Which events are still missing air temp data?
   # na_airT <- allvars %>% 
