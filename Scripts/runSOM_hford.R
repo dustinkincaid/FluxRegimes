@@ -236,6 +236,11 @@ sedRegPallette=c("cyan", "yellow", "orange", "red", "green3", "orchid","gray", "
 params <- read_csv("Data/somParams/params_SOM_hford_2020-11-17.csv")
 params <- as.matrix(params[1:nrow(params),])
 
+# Vector of observation number from original dataset
+observ <- myData %>% 
+  mutate(obs = row_number()) %>% 
+  dplyr::pull(obs)
+
 # initialize matrix to store results of each SOM run
 temp1 <- matrix(0, nrow(params), 5) #initialize empty matrix to append to params
 Results <- cbind(params, temp1) # concatenate empty columns to copy of params matrix

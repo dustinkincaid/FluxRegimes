@@ -1289,7 +1289,7 @@
       rename(gw_1d_allWells = `1d`, gw_4d_allWells = `4d`)    
     
     rm(comb_gw, comb_gw_long, gw_all)
-      
+        
 # ----    
 
     
@@ -1355,13 +1355,10 @@
   #   pivot_longer(cols = DO_pre:VWC_pre, names_to = "var", values_to = "value") %>% 
   #   pivot_wider(names_from = c(var, pit, depth), values_from = value) %>% 
   #   select(-c(transect))
-  
-  
-
-  
-  
+    
   # Play sound when done!
   beep(sound = "fanfare")   
+  
   
 # Join all variables together ----
   allvars <- full_join(rain_mets, q_event_max_delta, by = c("site", "event_start")) %>% 
@@ -1374,8 +1371,8 @@
     full_join(gw_event_max_delta, by = c("site", "event_start")) %>% 
     full_join(gw_preEvent_means, by = c("site", "event_start")) %>% 
     full_join(gw_preEvent_means_agg, by = c("site", "event_start")) %>% 
-    full_join(soil_means_sub2, by = c("site", "event_start")) %>% 
-    full_join(soil_means_agg, by = c("site", "event_start")) %>% 
+    full_join(soil_means_sub2, by = c("site", "event_start")) %>%
+    full_join(soil_means_agg, by = c("site", "event_start")) %>%
     full_join(events_all %>% 
                 select(site, event_start, time_sinceLastEvent, multipeak) %>% 
                 mutate(time_sinceLastEvent = as.numeric(time_sinceLastEvent)), by = c("site", "event_start")) %>% 
@@ -1386,16 +1383,14 @@
     # Add day of year
     mutate(DOY = yday(event_start)) %>% 
     # Add a column with difference b/w air temp and soil temp
-    mutate(diff_airT_soilT = airT_1d - SoilTemp_pre_dry_15cm) %>% 
+    # mutate(diff_airT_soilT = airT_1d - SoilTemp_pre_dry_15cm) %>% 
     # Shed rows with no event start
     filter(!is.na(event_start)) %>% 
     # Rearrange columns
     select(site, event_start, DOY, season, NO3_kg_km2, SRP_kg_km2, event_NO3_SRP, turb_kg_km2, everything())
   
   
-  
-  
-  
+
 # Which events are still missing air temp data?
   # na_airT <- allvars %>% 
   #   filter(is.na(airT_1d))
@@ -1404,6 +1399,29 @@
   # na_rain <- allvars %>% 
   #   filter(is.na(rain_event_total_mm))
   
+  
+# Calculate a variable for the difference b/w pre-event air temp and soil temp @ 15 cm
+soilT_mean <- soil_means_sub %>% 
+  # Create transect_pit ID
+  mutate(trans_pit = paste(transect, pit, sep = "_")) %>% 
+  # Keep only SoilTemp
+  select(-c(DO_pre, Redox_pre, VWC_pre)) %>% 
+  # Keep only 15cm
+  filter(depth == 15) %>% 
+  # Categorize trans_pits as representing a wetter lowland area (wet) or drier upland area (dry)
+  mutate(location = ifelse(trans_pit %in% c("HW_1", "WD_1", "WD_3", "WD_4", "WW_1"), "dry",
+                           ifelse(trans_pit %in% c("HW_2", "HW_3", "HW_5", "WW_6", "WW_8"), "wet", NA))) %>% 
+  # Calculate the mean soil temp @ 15 cm for dry vs. wet locations at each site
+  group_by(site, location, event_start) %>% 
+  summarize(SoilTemp_pre_15cm = mean(SoilTemp_pre, na.rm = T)) %>% 
+  pivot_wider(names_from = location, values_from = SoilTemp_pre_15cm) %>% 
+  rename(soilT_nonNorm_15cm_dry = dry, soilT_nonNorm_15cm_wet = wet)
+
+# Join to allvars and calculate diff_airT_soilT
+allvars <- full_join(allvars, soilT_mean) %>% 
+  mutate(diff_airT_soilT = airT_1d - soilT_nonNorm_15cm_dry) %>% 
+  select(-c(soilT_nonNorm_15cm_dry, soilT_nonNorm_15cm_wet))
+
 
 # Split the allvars into separate dfs for Hungerford and Wade & join the soil variables
 allvars_hford <- allvars %>% filter(site == "Hungerford") %>% 
