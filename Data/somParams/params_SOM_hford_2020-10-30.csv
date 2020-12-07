@@ -1,5 +1,0 @@
-myRun,myDataSet,nodes,myTopo,rows,cols,normMeth,wghtMeth,niter,crsAlpha,finAlpha,nClusters,colRowRatio
-1,hford,24,hexagonal,4,6,L2norm,noPCA,2000,0.05,0.01,4,1.5
-2,hford,28,hexagonal,4,7,L2norm,noPCA,2000,0.05,0.01,4,1.8
-3,hford,32,hexagonal,4,8,L2norm,noPCA,2000,0.05,0.01,4,2
-4,hford,36,hexagonal,4,9,L2norm,noPCA,2000,0.05,0.01,4,2.3
