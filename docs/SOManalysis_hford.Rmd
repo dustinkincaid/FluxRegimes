@@ -393,8 +393,11 @@ for (i in 1:nrow(params)) {
       # check2 <- 'check2'
       # print(check2)    
       # -------------- Visualize results in various plots (exported to pdf) --------------------------
+      # Create a new folder to save the SOM plots in PDFs produced by the SOM code
+      newFolder2 <- paste("../Data/somResults/hford/", Sys.Date(), "/SOMplots_PDFs", sep = "")
+      dir.create(newFolder2, recursive = TRUE)
       myFileName2 <- paste(myRun,"SOMplots",myDataSet,wghtMeth,normMeth, paste0(rows,"x", cols, myTopo), paste0(nclusters,"cl"), sep = "_")
-      pdf(file=paste(newFolder, myFileName2, sep = "/"), height=8, width=10)  #dev.off() is at 400
+      pdf(file=paste(newFolder2, myFileName2, sep = "/"), height=8, width=10)  #dev.off() is at 400
       par(mfrow=c(1,2), mar= c(5.5, 4, 4, 2) + 0.1)
       opar<-par()
       
