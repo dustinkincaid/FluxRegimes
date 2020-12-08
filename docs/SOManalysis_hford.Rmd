@@ -177,6 +177,8 @@ hford %>%
 * Rain  
     + Drop all the rain_Xd vars, b/c API_4d should cover this, though would be interesting to test how many days pre-event (e.g., 4 days for API) matters  
     + rain_int_mmPERmin_mean and rain_int_mmPERmin_max are correlated (74.4%); drop _max and so we can keep the mean intensity of the rain event
+* Stream
+    + turb_1d proved to be unuseful in driving clusters in SOM, so I removed it
 <br><br>
 
 ##### Look at correlations again after dropping variables
