@@ -1,8 +1,7 @@
 ---
-title: <font size = "5"> SOM analysis for Hungerford </font>
-# title: "Self-organizing map analysis for Hungerford"
+title: <font size = "5"> Self-organizing map analysis for Hungerford </font>
 author: "Dustin Kincaid"
-date: "12/01/2020<br><br>"
+date: "12/10/2020<br><br>"
 output:
   html_document:
     df_print: paged
@@ -103,7 +102,7 @@ hford %>%
   # Keep only complete observations/rows (no NAs in any of the columns)
   na.omit() %>% 
   # Visualize these
-  lares::corr_cross(max_pvalue = 0.10, top = 30)
+  lares::corr_cross(max_pvalue = 0.05, top = 30)
 ```
 
 ```{r, include = FALSE}
@@ -139,8 +138,20 @@ hford %>%
 ##### Decisions for eliminating variables w/ correlations >70%
 These were used for the 2020-12-01 run:  
 
-* **These decisions were tough to make and need  review**
+* **These decisions were tough to make and need review**
     + rain_event_total_mm and API_4d are highly correlated (88%), but represent different things; I'm going to leave both for now, but could try versions w/ one or the other to see if it matters
+```{r, include = TRUE, echo = FALSE, warning = FALSE, message = FALSE}
+# rain_event_total_mm ~ API_4d
+hford %>% 
+  ggplot(aes(x = rain_event_total_mm, y = API_4d)) +
+  geom_point(shape = 1) +
+  geom_abline(slope = 1) +
+  geom_smooth(method = "lm") +
+  theme_classic()
+```
+<br><br>    
+
+* **Tough decisions that need review (continued)**
     + q_event_max and q_mm are highly correlated (83.8%); let's drop q_event_max for now, because?
     + SoilTemp_pre_wet_15cm and VWC_pre_wet_15cm are correlated (72.3%), but they're pretty different and close enough to 70% correlation cutoff; will leave both for now and could try versions w/ one or the other to see if it matters
 * **I feel OK about these decisions, but they should be reviewed as well**
@@ -163,8 +174,6 @@ These were used for the 2020-12-01 run:
     + Drop q_event_dQRate_cmsPerHr b/c it's confusing and hopefully q_event_delta or rain intensity will capture this      
 * Redox  
     + If redox variables prove not to be important or they are highly correlated with another variable, we can remove them and increase n obs by at least 7  
-* Soil temps  
-    + soil temp @ 15cm @ pits 1 & 3 highly correlated, so let's keep the temp from pit 3 b/c we're using the VWC from that pit  
 * Rain  
     + Drop all the rain_Xd vars, b/c API_4d should cover this, though would be interesting to test how many days pre-event (e.g., 4 days for API) matters  
     + rain_int_mmPERmin_mean and rain_int_mmPERmin_max are correlated (74.4%); drop _max and so we can keep the mean intensity of the rain event
@@ -207,7 +216,9 @@ These were used for the 2020-12-01 run:
                               q_event_max,
                               rain_int_mmPERmin_max,
                               # Drop this complicated variable
-                              q_event_dQRate_cmsPerHr))
+                              q_event_dQRate_cmsPerHr,
+                              # Drop these variables, which proved unuseful in the SOM,
+                              turb_1d))
 
   # Create df w/ dropped variables
   hford_drop <- hford %>% 
@@ -218,7 +229,7 @@ These were used for the 2020-12-01 run:
   hford_drop %>% 
     # Keep only complete observations/rows (no NAs in any of the columns)
     na.omit() %>% 
-    lares::corr_cross(max_pvalue = 0.10, top = 30)
+    lares::corr_cross(max_pvalue = 0.05, top = 30)
 ```
 
 #### Self-organizing map (SOM)
@@ -901,7 +912,8 @@ datWithCluster %>%
   group_by(cluster, var) %>% 
   summarize(median = median(value, na.rm = T)) %>% 
   # Order the vars n var
-  mutate(var = factor(var, levels = c("turb_event_max", "multipeak", "q_mm", "rain_event_total_mm", "rain_event_hrs", "rain_int_mmPERmin_mean", "turb_1d", "SRP_1d", "NO3_1d",                                            "q_4d", "time_sinceLastEvent", "API_4d", "Redox_pre_wet_15cm", "DO_pre_wet_15cm", "VWC_pre_wet_15cm", "SoilTemp_pre_wet_15cm", 
+  mutate(var = factor(var, levels = c("turb_event_max", "multipeak", "q_mm", "rain_event_total_mm", "rain_event_hrs", "rain_int_mmPERmin_mean", "SRP_1d", "NO3_1d",
+                                      "q_4d", "time_sinceLastEvent", "API_4d", "Redox_pre_wet_15cm", "DO_pre_wet_15cm", "VWC_pre_wet_15cm", "SoilTemp_pre_wet_15cm", 
                                       "solarRad_4d", "PET_mmHR", "diff_airT_soilT", "DOY"))) %>% 
   ggplot(aes(x = var, y = median)) +
     # Must use scales = "free" when using the reordering functions
@@ -929,7 +941,8 @@ datWithCluster %>%
   summarize(mean = mean(value),
             SE = sd(value)/sqrt(length(!is.na(value)))) %>% 
   # Order the vars n var
-  mutate(var = factor(var, levels = c("turb_event_max", "multipeak", "q_mm", "rain_event_total_mm", "rain_event_hrs", "rain_int_mmPERmin_mean", "turb_1d", "SRP_1d", "NO3_1d",                                            "q_4d", "time_sinceLastEvent", "API_4d", "Redox_pre_wet_15cm", "DO_pre_wet_15cm", "VWC_pre_wet_15cm", "SoilTemp_pre_wet_15cm", 
+  mutate(var = factor(var, levels = c("turb_event_max", "multipeak", "q_mm", "rain_event_total_mm", "rain_event_hrs", "rain_int_mmPERmin_mean", "SRP_1d", "NO3_1d",
+                                      "q_4d", "time_sinceLastEvent", "API_4d", "Redox_pre_wet_15cm", "DO_pre_wet_15cm", "VWC_pre_wet_15cm", "SoilTemp_pre_wet_15cm", 
                                       "solarRad_4d", "PET_mmHR", "diff_airT_soilT", "DOY"))) %>%   
   ggplot(aes(x = var, y = mean)) +
     # Must use scales = "free" when using the reordering functions
