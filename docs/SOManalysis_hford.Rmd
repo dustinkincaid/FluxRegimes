@@ -23,8 +23,7 @@ editor_options:
 Cluster high-flow event characteristics and antecedent watershed conditions to evaluate how these factors converge as flux regimes (clusters) to produce variability in:  
 1. Event NO3 yields  
 2. Event SRP yields  
-3. Event turbidity yields  
-4. Event NO3:SRP yield ratios   
+3. Event NO3:SRP yield ratios   
 <br><br>
 
 ```{r setup, include=FALSE, warning=FALSE, message = FALSE}
