@@ -155,7 +155,7 @@
       # The data are downloaded in UTC
       mutate(timestamp = mdy_hm(timestamp, tz = "UTC")) %>% 
       # Convert the times to EDT (GMT-4), because this is what the stream sensor data are in
-      mutate(timestamp = force_tz(timestamp, tzone = "Etc/GMT+4")) %>% 
+      mutate(timestamp = with_tz(timestamp, tzone = "Etc/GMT+4")) %>% 
       select(-c(recNum, battVolt, "Line#")) %>% 
       select(site, timestamp, everything()) %>% 
       arrange(site, timestamp) %>% 
