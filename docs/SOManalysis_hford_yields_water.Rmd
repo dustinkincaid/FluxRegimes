@@ -1,5 +1,5 @@
 ---
-title: <font size = "5"> Self-organizing map analysis for Hungerford </font>
+title: <font size = "5"> Self-organizing map analysis for Hungerford YIELDS </font>
 author: "Dustin Kincaid"
 date: "12/10/2020<br><br>"
 output:
@@ -21,9 +21,11 @@ editor_options:
 
 #### Objective  
 Cluster high-flow event characteristics and antecedent watershed conditions to evaluate how these factors converge as flux regimes (clusters) to produce variability in:  
-1. Event NO3 yields  
-2. Event SRP yields  
-3. Event NO3:SRP yield ratios   
+1. Event water yields  
+2. Event NO3 yields  
+3. Event SRP yields  
+4. Event NO3:SRP yield ratios  
+5. Event turbidity yields  
 <br><br>
 
 ```{r setup, include=FALSE, warning=FALSE, message = FALSE}
@@ -48,7 +50,7 @@ knitr::opts_chunk$set(fig.width = 6, fig.asp = 0.618, out.width = "70%", fig.ali
   source(here("Scripts", "L2norm.R"))
 
 # Create a new folder to save the plots and CSVs produced by the SOM code
-newFolder <- paste("Data/somResults/hford/", Sys.Date(), sep = "")
+newFolder <- paste("Data/somResults/hford/yields", Sys.Date(), sep = "")
 dir.create(here(newFolder), recursive = TRUE)
 
 # Give a site label to file names produced in SOM code
