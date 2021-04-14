@@ -1,8 +1,8 @@
 ---
-title: <font size = "5"> Self-organizing map analysis for event water yields at Hungerford
+title: <font size = "5"> Self-organizing map analysis for event turbidity yields at Wade
   </font>
 author: "Dustin Kincaid"
-date: "04/07/2021<br><br>"
+date: "04/13/2021<br><br>"
 output:
   html_document:
     df_print: paged
@@ -19,7 +19,7 @@ editor_options:
 ```
 
 #### Objective  
-Cluster high-flow event characteristics and antecedent watershed conditions to evaluate how these factors converge as flux regimes (clusters) to produce variability in event water yields  
+Cluster high-flow event characteristics and antecedent watershed conditions to evaluate how these factors converge as flux regimes (clusters) to produce variability in event turbidity yields  
 <br><br>
 
 ```{r setup, include=FALSE, warning=FALSE, message = FALSE}
@@ -46,15 +46,15 @@ knitr::opts_chunk$set(fig.width = 6, fig.asp = 0.618, out.width = "70%", fig.ali
   source(here("Scripts", "L2norm.R"))
 
 # Create a new folder to save the plots and CSVs produced by the SOM code
-newFolder <- paste("Data/somResults/hford/yields/water/", Sys.Date(), sep = "")
+newFolder <- paste("Data/somResults/wade/yields/turb/", Sys.Date(), sep = "")
 dir.create(here(newFolder), recursive = TRUE)
 
 # Give a site label to file names produced in SOM code
-  myDataSet <- c("hford")
+  myDataSet <- c("wade")
 
 # Read in data
   # Calculated event metrics for each site as calculated in compile_calculate_allVars.R
-  hford <- read_csv(here("Data", "eventMetrics_hford.csv")) %>% 
+  wade <- read_csv(here("Data", "eventMetrics_wade.csv")) %>% 
     mutate(event_start = ymd_hms(event_start, tz = "Etc/GMT+4")) %>% 
     # Code the multipeak col as numerical
     mutate(multipeak = ifelse(multipeak == "NO", 0, 1))
@@ -66,20 +66,18 @@ Per K Underwood: if two variables are strongly correlated (negatively or positiv
 ```{r, include = TRUE, echo = FALSE, warning = FALSE, message = FALSE, fig.width = 8, out.width = "80%"}
 # Select vars to keep Step 1
 # List the variables that will not be used in the analysis (e.g., response/dependent & ID/INFO)
-drop.info <- names(hford %>% 
+drop.info <- names(wade %>% 
                      select(# Remove the non-numerical ID/INFO
                             site, season, event_start,
                             # Remove response variables
-                            q_mm, q_event_max, q_event_delta, q_event_dQRate_cmsPerHr))
+                            NO3_kg_km2, SRP_kg_km2, event_NO3_SRP, turb_kg_km2, turb_event_max))
 
 # Look at correlations between variables
-hford %>% 
+wade %>% 
   # Remove the vars listed above
   select(-one_of(drop.info)) %>% 
   # Remove irrelevant variables
-  select(-c(NO3_kg_km2, SRP_kg_km2, event_NO3_SRP, turb_kg_km2,
-         NO3_1d, SRP_1d, turb_1d, turb_event_max, 
-         starts_with("DO_"), starts_with("Redox"), multipeak)) %>% 
+  # select(-c(multipeak)) %>% 
   # Remove all rain_Xd vars and keep the antecedent precipitation index (API) instead
   select(-c(rain_1d:rain_30d)) %>% 
   # Remove all GW event data (e.g., max and change); keep pre-event level data for now
@@ -89,8 +87,10 @@ hford %>%
   # Remove all pre-event GW levels for individual wells and keep the aggregate ones
   select(-c(starts_with(c("gw_1d_well", "gw_4d_well")))) %>% 
   # Remove all pre-event soil var means and keep the aggregate "dry" and "wet" ones
-  select(-c(contains("HWp"))) %>% 
-  # Let's use 15cm values for SoilTemp for now; remove all 30cm & 45cm aggreate soil vars except VWC
+  select(-c(contains("WWp"))) %>% 
+  # Remove variables that don't likely matter to turbidity yields
+  select(-c(starts_with("DO"), starts_with("Redox"))) %>% 
+  # Let's use 15cm values for SoilTemp for now; remove 30cm & 45cm vars 
   select(-c(SoilTemp_pre_dry_30cm, SoilTemp_pre_wet_30cm,
             SoilTemp_pre_dry_45cm, SoilTemp_pre_wet_45cm)) %>%
   # For now, let's drop the aggreate soil vars for the dry site and keep the wet ones
@@ -104,29 +104,29 @@ hford %>%
 ```{r, include = FALSE}
 # Look at plots of correlated variables
   # GW level ~ VWC
-  hford %>%
+  wade %>%
     # pivot_longer(cols = c(VWC_pre_pit1_15cm, VWC_pre_pit1_30cm, VWC_pre_pit1_45cm, VWC_pre_pit3_15cm, VWC_pre_pit3_30cm, VWC_pre_pit3_45cm), names_to = "var", values_to = "level") %>%
     pivot_longer(cols = c(VWC_pre_wet_15cm, VWC_pre_wet_30cm), names_to = "var", values_to = "VWC") %>%
-    ggplot(aes(x = gw_4d_allWells, y = VWC, color = var)) +
+    ggplot(aes(x = gw_1d_allWells, y = VWC, color = var)) +
     geom_point(shape = 1) +
     geom_abline(slope = 1) +
     theme_classic()
 
   # Other correlations
   # scatter plot comparison
-  hford %>% 
-    ggplot(aes(x = rain_int_mmPERmin_mean, y = rain_int_mmPERmin_max)) +
+  wade %>% 
+    ggplot(aes(x = gw_1d_allWells, y = gw_4d_allWells)) +
     geom_point(shape = 1) +
     geom_abline(slope = 1) +
     geom_smooth(method = "lm") +
     theme_classic()
   # boxplot comparison
-  hford %>% 
+  wade %>% 
     pivot_longer(cols = c(rain_int_mmPERmin_mean, rain_int_mmPERmin_max), names_to = "var", values_to = "value") %>% 
     ggplot(aes(x = var, y = value)) +
     geom_boxplot()
   
-  hford %>% 
+  wade %>% 
     ggplot(aes(x = rain_int_mmPERmin_max)) +
     geom_histogram()
 ```
@@ -134,39 +134,39 @@ hford %>%
 ##### Decisions for eliminating variables w/ correlations >70%
 
 * **These decisions were tough to make and need review**
-  + rain_event_total_mm and API_4d are highly correlated (87.2%), but represent different things; I'm going to leave both for now, and look at PCA later
-  + VWC_pre_dry_15cm and VWC_pre_wet_15cm are positively correlated (73.4%); I'm going to leave both for now, and look at PCA later
-  + rain_int_mmPERmin_max & SoilTemp_pre_wet_15cm positively correlated (70.3%); I'm going to leave both for now, and look at PCA later  
+
 * **I feel OK about these decisions, but they should be reviewed as well**
 * If the 1-d and 4-d values for a variable are highly correlated, use the 4-d value
-  + gw_1d_allWells and gw_4d_allWells are highly correlated (99.2%); remove gw_1d_allWells
-  + airT_1d and airT_4d are highly correlated (92.9%); removing airT_1d
-  + q_1d and q_4d highly correlated (86.4%); removing q_1d
-  + solarRad_1d and solarRad_4d are positively correlated (73.2%); drop solarRad_1d per rule above  
+  + airT_1d and airT_4d are highly correlated (92.5%); removing airT_1d
+  + EXCEPTION: gw_1d_allWells and gw_4d_allWells are highly correlated (91.3%); BUT the 1d value is better correlated w/ a VWC variable (gw_1d + VWC_pre_wet_30cm = 91.5% vs. gw_4d + VWC_pre_wet_30cm = 84.8%); so remove gw_4d_allWells
+  + q_1d and q_4d highly correlated (89.5%); removing q_1d
+  + solarRad_1d and solarRad_4d are positively correlated (70.8%); drop solarRad_1d per rule above  
 * Trying to find a VWC variable that correlates well with GW level so that I can remove GW level vars (no GW data in 2017)
-  + gw_4d_allWells and VWC_pre_wet_30cm most highly correlated (94.9%); same with VWC_pre_wet_15cm (89.6%), except slightly less linear at higher values
-  + drop gw_4d_allWells and use VWC as a proxy for GW level
-  + drop VWC_pre_wet_45cm & wet transect equivalent (we'll use soil vars measured at 15cm)
-  + VWC_pre_wet_15cm and VWC_pre_wet_30cm highly correlated (90.5%)
-  + I want to keep all 15cm values for soil vars including VWC, so for now we'll drop VWC_pre_wet_30cm to avoid double-weighting VWC  
+  + gw_1d_allWells and VWC_pre_wet_30cm most highly correlated (91.5%); same with VWC_pre_wet_15cm (85.3%); keep just one b/c the two VWC's are correlated 95.3%; keep VWC_pre_wet_30cm
+  + drop gw_1d_allWells and use VWC as a proxy for GW level
 * Soil variables
-  + SoilTemp_pre_dry_15cm & equivalent at wet transect are highly correlated (99.4%); let's keep wet transect temps
+  + SoilTemp_pre_dry_15cm & equivalent at wet transect are highly correlated (99.7%); let's keep wet transect temps
+  + drop all 30cm and 45cm soil vars except for when 30cm makes sense to keep (eg. VWC_pre_wet_30cm as proxy for GW level)  
+  + VWC_pre_dry_15cm and VWC_pre_wet_30cm highly correlated (77.5%); drop VWC_pre_dry_15cm to preserve the other as proxy for GW level
+  + DO_pre_wet_15cm + Redox_pre_wet_15cm are correlated (69.3%) and are on the same PCA vector; I should remove one; I removed redox for NO3 SOM so remove redox here
 * MET variables
-  + airT_4d and dewPoint_4d are highly correlated (97.3%), as is dewPoint_1d (91.8%); removing both dewPoints
-  + airT_4d and SoilTemp_pre_wet_15cm are highly correlated (94.2%); drop airT_4d b/c we still have diff_airT_soilT
+  + airT_4d and dewPoint_4d are highly correlated (96.2%), as is dewPoint_1d (93%); removing both dewPoints
+  + airT_4d and SoilTemp_pre_wet_15cm are highly correlated (90.7%); drop airT_4d b/c we still have diff_airT_soilT
+  + rain_int_mmPERmin_max + rain_int_mmPERmin_mean aren't super correlated (42.4%), but represent similar things, so removing the mean version  
+* Stream variables 
+  + q_event_delta & q_event_max are highly correlated (88.2%); let's keep q_event_max  
+  + q_event_max + q_mm are highly correlated (74.2%); let's keep q_event_max b/c NO3 & SRP yields calculated using q_mm
+  + q_event_max + turb_event_max are correlated (71.5%); keep q_event_max 
 * **I removed these variables after the initial SOM run b/c they did not differentiate clusters**
-  + diff_airT_soilT
-  + rain_int_mmPER_mean
 <br><br>
 
 ##### Look at correlations again after dropping variables
 ```{r, include = TRUE, echo = FALSE, warning = FALSE, message = FALSE, fig.width = 8, out.width = "80%"}
 # Look at correlations again without dropped variables
   # List the additional dropped variables
-  drop.vars <- names(hford %>% 
-                       select(NO3_kg_km2, SRP_kg_km2, event_NO3_SRP, turb_kg_km2,
-                              NO3_1d, SRP_1d, turb_1d, turb_event_max, 
-                              starts_with("DO_"), starts_with("Redox"), multipeak,
+  drop.vars <- names(wade %>% 
+                       select(# Remove multipeak for now b/c we have q_4d and time_sinceLastEvent
+                              multipeak,
                               # Remove all rain_Xd vars and keep API instead
                               rain_1d:rain_30d,
                               # Remove all GW event data (e.g., max and change); keep pre-event level data for now
@@ -176,41 +176,53 @@ hford %>%
                               # Remove all pre-event GW levels for individual wells and keep the aggregate ones
                               starts_with(c("gw_1d_well", "gw_4d_well")),
                               # Remove all pre-event soil var means and keep the aggregate "dry" and "wet" ones
-                              contains("HWp"),
-                              # Let's use 15cm values for SoilTemp for now; remove all 30cm & 45cm aggreate soil vars except VWC
+                              contains("WWp"),
+                              # Remove variables that don't likely matter to turbidity yields
+                              starts_with("DO"), starts_with("Redox"),
+                              # Let's use 15cm values for SoilTemp for now; remove 30cm & 45cm vars 
                               SoilTemp_pre_dry_30cm, SoilTemp_pre_wet_30cm,
                               SoilTemp_pre_dry_45cm, SoilTemp_pre_wet_45cm,
                               # For now, let's drop the aggreate soil vars for the dry site and keep the wet ones
                               # contains("pre_dry"),
                               # Drop the _1d version of variables
-                              gw_1d_allWells,
                               airT_1d,
                               dewPoint_1d,
                               q_1d,
                               solarRad_1d,
                               # Drop these vars that highly correlated with others
-                              SoilTemp_pre_dry_15cm,
                               gw_4d_allWells,
+                              SoilTemp_pre_dry_15cm,
+                              gw_1d_allWells,
+                              VWC_pre_dry_15cm,
                               VWC_pre_dry_30cm,
-                              VWC_pre_wet_30cm,
+                              VWC_pre_wet_15cm,
                               VWC_pre_dry_45cm,
                               VWC_pre_wet_45cm,
                               airT_4d,
                               dewPoint_4d,
-                              # I removed these after initial SOM run b/c they did not differentiate clusters
-                              diff_airT_soilT,
+                              q_event_delta,
+                              q_mm,
                               rain_int_mmPERmin_mean,
-                              # Removing DOY b/c other variables have seasonal cycles
-                              DOY
+                              # I removed these after initial SOM run b/c they did not differentiate clusters
+                              PET_mmHR,
+                              rain_event_hrs,
+                              turb_1d,
+                              # Drop this complicated variable
+                              q_event_dQRate_cmsPerHr,
+                              # Testing the importance of DOY as a variable
+                              DOY,
+                              # Remove these vars b/c irrelevant for turbidity
+                              SRP_1d,
+                              NO3_1d
                               ))
 
   # Create df w/ dropped variables
-  hford_drop <- hford %>% 
+  wade_drop <- wade %>% 
     # Drop variables
     select(-one_of(drop.info, drop.vars))
 
   # Look at correlations again without dropped variables
-  hford_drop %>% 
+  wade_drop %>% 
     # Keep only complete observations/rows (no NAs in any of the columns)
     na.omit() %>% 
     lares::corr_cross(max_pvalue = 0.05, top = 30)
@@ -262,7 +274,7 @@ pcaCharts <- function(x) {
 ```
 
 ```{r, include = TRUE, warning = FALSE, fig.width = 10, fig.height = 8}
-myData <- hford_drop %>% 
+myData <- wade_drop %>% 
   # Keep only complete observations/rows (no NAs in any of the columns)
   na.omit()
 
@@ -270,7 +282,6 @@ myData <- hford_drop %>%
   PCA <- prcomp(myData, scale = TRUE, center = TRUE)
   pcaCharts(PCA)
 ```
-Leaving all vars for now, but might want to consider dropping either API_4d or rain_event_total_mm b/c nearly on same vector
 <br><br>
 
 #### Self-organizing map (SOM)
@@ -279,11 +290,11 @@ We're only using complete observations/rows (no NAs in any columns)
 According to the heuristic rule from Vesanto 2000, number of grid elements/grid size/nodes = 5 * sqrt(n)  
 To determine the the shape of the grid (ratio of columns to rows), we use the ratio of the first two eigen values of the input data set as recommended by Park et al. 2006  
 ```{r, include = TRUE, echo = FALSE}
-myData <- hford_drop %>% 
+myData <- wade_drop %>% 
   # Keep only complete observations/rows (no NAs in any of the columns)
   na.omit()
 
-noquote(paste0("No. of complete observations: ", nobs(myData), " out of ", nobs(hford), " observations"))
+noquote(paste0("No. of complete observations: ", nobs(myData), " out of ", nobs(wade), " observations"))
 
 # Run this code once to determine which dimensions to input into the params_SOM . . .csv file that is saved as the 'params' object below
   # According to the heuristic rule from Vesanto 2000, number of grid elements/grid size/nodes = 5 * sqrt(n)
@@ -328,7 +339,7 @@ sedRegPallette=c("cyan", "yellow", "orange", "red", "green3", "orchid","gray", "
 
 # Read in table of parameters (grid rows, cols, grid type, learning rate etc)
 ### IMPORTANT: cannot have number nodes greater than num observations
-params <- read_csv(here("Data", "somParams", "params_SOM_hford_water.csv"))
+params <- read_csv(here("Data", "somParams", "params_SOM_wade_turb.csv"))
 params <- as.matrix(params[1:nrow(params),])
 
 # Vector of observation number from original dataset
@@ -444,7 +455,7 @@ for (i in 1:nrow(params)) {
       # print(check2)    
       # -------------- Visualize results in various plots (exported to pdf) --------------------------
       # Create a new folder to save the SOM plots in PDFs produced by the SOM code
-      newFolder2 <- paste("Data/somResults/hford/yields/water/", Sys.Date(), "/SOMplots_PDFs", sep = "")
+      newFolder2 <- paste("Data/somResults/wade/yields/turb/", Sys.Date(), "/SOMplots_PDFs", sep = "")
       dir.create(here(newFolder2), recursive = TRUE)
       myFileName2 <- paste(myRun,"SOMplots",myDataSet,wghtMeth,normMeth, paste0(rows,"x", cols, myTopo), paste0(nclusters,"cl"), sep = "_")
       pdf(file=here(paste(newFolder2, myFileName2, sep = "/")), height=8, width=10)  #dev.off() is at 400
@@ -692,7 +703,7 @@ write_csv(clustAssignmDF, here(paste0(newFolder,"/","ClustAssign_",myDataSet,".c
 
 ##### Choose the best SOM run based on non-parametric F-stat and quantization error
 We want to maximize npF (ratio of b/w cluster variance) and minimize QE (mean distance b/w each data vector & best-matching unit)  
-Here are the top 30% of runs based on npF
+Here are the top 50% of runs based on npF
 ```{r, include = TRUE, echo = FALSE, message = FALSE, warning = FALSE, fig.width = 8, out.width = "80%"}
 # CHOOSE BEST LATTICE CONFIGURATION ----
   # Examine the non-parametric F-stat (npF) and quantization error (QE) to choose the best lattice configuration
@@ -706,8 +717,8 @@ Here are the top 30% of runs based on npF
   ResultsDF %>% 
     # Sort by npF (max to min)
     arrange(desc(npF)) %>% 
-    # Only show top 30% of choices
-    slice(1:(nrow(.)/3)) %>% 
+    # Only show top 50% of choices
+    slice(1:(nrow(.)/2)) %>% 
     # Create lattice config ID (rows x cols)
     mutate(latID = paste(paste(rows, "x", cols, sep = ""), "_", Clusters, "cl", "_", Run, sep = "")) %>% 
     # Plot
@@ -734,7 +745,7 @@ Here are the top 30% of runs based on npF
 ```
 <br><br>
 
-##### Choose the best run from each high performing (top 33%) cluster #
+##### Choose the best run from each high performing (top 50%) cluster #
 ```{r, include = TRUE, echo = FALSE, message = FALSE}
 # Automated
 # best_summ_top <-
@@ -757,8 +768,9 @@ Here are the top 30% of runs based on npF
 best_summ_top <- 
   ResultsDF %>% 
   select(Run, rows, cols, Nodes, Clusters, npF, QE) %>% 
-  filter(Run %in% c(59, 62, 36))
-
+  # filter(Run %in% c(17, 7, 15))
+  filter(Run %in% c(4, 39, 45))
+  
 # noquote("These were the top runs for each high-performing (top 33%) cluster #:")
 best_summ_top %>% 
   mutate_at(vars(c(npF, QE)),
@@ -799,7 +811,7 @@ datWithCluster <- clustAssignmDF %>%
   # Bind cluster ID to myData
   bind_cols(myData) %>% 
   # Join to original data to get event IDs
-  left_join(hford) %>% 
+  left_join(wade) %>% 
   mutate(event_start = ymd_hms(event_start, tz = "Etc/GMT+4")) %>% 
   # Drop all the independent variables you didn't use in the SOM (copy from myData above); 
   # but KEEP the INFO vars
@@ -809,7 +821,7 @@ datWithCluster <- clustAssignmDF %>%
   select(site:season, clust_wat_4cl, clust_wat_5cl, clust_wat_6cl, everything()) %>% 
   select(-obs) %>% 
   # Add groundwater data
-  left_join(hford %>% select(site, event_start, starts_with(c("gw_1d", "gw_4d"))))
+  left_join(wade %>% select(site, event_start, starts_with(c("gw_1d", "gw_4d"))))
   
 # Write this results DF to CSV
 write_csv(datWithCluster, here(paste0(newFolder,"/","Results_", myDataSet, "_", "withClusters",".csv")))
@@ -833,9 +845,9 @@ To examine this run in greater detail (e.g., component planes), see the 'X_SOMpl
 ##### 4 cluster model - examine boxplots of independent variables by cluster
 ```{r , include = TRUE, echo = FALSE, message = FALSE, warning = FALSE, fig.asp = 1.4}
 datWithCluster %>% 
-  select(-one_of(drop.vars)) %>% 
+  select(-one_of(drop.vars)) %>%
   # pivot_longer(cols = DOY:ncol(.), names_to = "var", values_to = "value") %>% 
-  pivot_longer(cols = rain_event_total_mm:ncol(.), names_to = "var", values_to = "value") %>%
+  pivot_longer(cols = rain_event_total_mm:ncol(.), names_to = "var", values_to = "value") %>% 
   ggplot(aes(x = clust_wat_4cl, y = value, group = clust_wat_4cl)) +
   facet_wrap(~var, scales = "free_y", ncol = 4) +
   geom_boxplot(fill = "white") +
@@ -870,8 +882,11 @@ datWithCluster %>%
             q3 = quantile(value, 3/4, na.rm = T)) %>%   
   # Order the vars n var
   mutate(var = factor(var, levels = c("rain_int_mmPERmin_mean", "rain_int_mmPERmin_max", "rain_event_hrs", "rain_event_total_mm",
-                                      "q_4d", "time_sinceLastEvent", "API_4d", "VWC_pre_wet_15cm", "VWC_pre_dry_30cm", "VWC_pre_dry_15cm", "SoilTemp_pre_wet_15cm",
-                                      "solarRad_4d", "PET_mmHR", "diff_airT_soilT", "DOY"))) %>%
+                                      "q_4d", "q_event_max", "time_sinceLastEvent", "API_4d", "VWC_pre_wet_15cm", "VWC_pre_wet_30cm", "VWC_pre_dry_15cm", "VWC_pre_dry_30cm", "SoilTemp_pre_wet_15cm",
+                                      "DO_pre_dry_15cm", "DO_pre_wet_15cm", "Redox_pre_dry_15cm", "Redox_pre_wet_15cm", 
+                                      "solarRad_4d", "PET_mmHR", "diff_airT_soilT", "DOY", "NO3_1d", "SRP_1d", "turb_1d"))) %>%
+  
+  
   ggplot(aes(x = var, y = median)) +
     # Must use scales = "free" when using the reordering functions
     facet_wrap(~cluster, ncol = 2) +
@@ -892,7 +907,7 @@ datWithCluster %>%
 datWithCluster %>% 
   select(-one_of(drop.vars)) %>% 
   # pivot_longer(cols = DOY:ncol(.), names_to = "var", values_to = "value") %>% 
-  pivot_longer(cols = rain_event_total_mm:ncol(.), names_to = "var", values_to = "value") %>%
+  pivot_longer(cols = rain_event_total_mm:ncol(.), names_to = "var", values_to = "value") %>% 
   ggplot(aes(x = clust_wat_5cl, y = value, group = clust_wat_5cl)) +
   facet_wrap(~var, scales = "free_y", ncol = 4) +
   geom_boxplot(fill = "white") +
@@ -927,8 +942,9 @@ datWithCluster %>%
             q3 = quantile(value, 3/4, na.rm = T)) %>%   
   # Order the vars n var
   mutate(var = factor(var, levels = c("rain_int_mmPERmin_mean", "rain_int_mmPERmin_max", "rain_event_hrs", "rain_event_total_mm",
-                                      "q_4d", "time_sinceLastEvent", "API_4d", "VWC_pre_wet_15cm", "VWC_pre_dry_30cm", "VWC_pre_dry_15cm", "SoilTemp_pre_wet_15cm",
-                                      "solarRad_4d", "PET_mmHR", "diff_airT_soilT", "DOY"))) %>%
+                                      "q_4d", "q_event_max", "time_sinceLastEvent", "API_4d", "VWC_pre_wet_15cm", "VWC_pre_wet_30cm", "VWC_pre_dry_15cm", "VWC_pre_dry_30cm", "SoilTemp_pre_wet_15cm",
+                                      "DO_pre_dry_15cm", "DO_pre_wet_15cm", "Redox_pre_dry_15cm", "Redox_pre_wet_15cm", 
+                                      "solarRad_4d", "PET_mmHR", "diff_airT_soilT", "DOY", "NO3_1d", "SRP_1d", "turb_1d"))) %>%
   ggplot(aes(x = var, y = median)) +
     # Must use scales = "free" when using the reordering functions
     facet_wrap(~cluster, ncol = 2) +
@@ -949,7 +965,7 @@ datWithCluster %>%
 datWithCluster %>% 
   select(-one_of(drop.vars)) %>% 
   # pivot_longer(cols = DOY:ncol(.), names_to = "var", values_to = "value") %>% 
-  pivot_longer(cols = rain_event_total_mm:ncol(.), names_to = "var", values_to = "value") %>%
+  pivot_longer(cols = rain_event_total_mm:ncol(.), names_to = "var", values_to = "value") %>% 
   ggplot(aes(x = clust_wat_6cl, y = value, group = clust_wat_6cl)) +
   facet_wrap(~var, scales = "free_y", ncol = 4) +
   geom_boxplot(fill = "white") +
@@ -984,8 +1000,9 @@ datWithCluster %>%
             q3 = quantile(value, 3/4, na.rm = T)) %>%   
   # Order the vars n var
   mutate(var = factor(var, levels = c("rain_int_mmPERmin_mean", "rain_int_mmPERmin_max", "rain_event_hrs", "rain_event_total_mm",
-                                      "q_4d", "time_sinceLastEvent", "API_4d", "VWC_pre_wet_15cm", "VWC_pre_dry_30cm", "VWC_pre_dry_15cm", "SoilTemp_pre_wet_15cm",
-                                      "solarRad_4d", "PET_mmHR", "diff_airT_soilT", "DOY"))) %>%
+                                      "q_4d", "q_event_max", "time_sinceLastEvent", "API_4d", "VWC_pre_wet_15cm", "VWC_pre_wet_30cm", "VWC_pre_dry_15cm", "VWC_pre_dry_30cm", "SoilTemp_pre_wet_15cm",
+                                      "DO_pre_dry_15cm", "DO_pre_wet_15cm", "Redox_pre_dry_15cm", "Redox_pre_wet_15cm", 
+                                      "solarRad_4d", "PET_mmHR", "diff_airT_soilT", "DOY", "NO3_1d", "SRP_1d", "turb_1d"))) %>%
   ggplot(aes(x = var, y = median)) +
     # Must use scales = "free" when using the reordering functions
     facet_wrap(~cluster, ncol = 2) +
