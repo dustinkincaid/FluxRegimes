@@ -1,14 +1,14 @@
 ---
-title: <font size = "5"> Visualizing all SOM yield results </font>
+title: <font size = "5"> Visualizing all SOM event water yield results </font>
 author: "Dustin Kincaid"
-date: "04/14/2021<br><br>"
+date: "04/15/2021<br><br>"
 output: html_document
 editor_options: 
   chunk_output_type: console
 ---
 
 ### Objective  
-##### Visualize results of SOM clustered flux regimes on water, NO3, SRP, and turbidity event yields from Hungerford and Wade Brooks
+##### Visualize results of SOM clustered flux regimes on event water yields from Hungerford and Wade Brooks
 <br><br>
 
 ```{r setup, include=FALSE, warning=FALSE, message = FALSE}
@@ -33,18 +33,17 @@ knitr::opts_chunk$set(fig.width = 6, fig.asp = 0.618, out.width = "70%", fig.ali
 
   # SOM results from SOManalysis_SITE_yields_VAR.Rmd
   # Water
-  som_wat_hf <- read_csv(here("Data", "somResults", "hford", "yields", "water", "2021-04-07", "Results_hford_withClusters.csv"))
-  som_wat_wd <- read_csv(here("Data", "somResults", "wade", "yields", "water", "2021-04-07", "Results_wade_withClusters.csv"))
+  som_hf <- read_csv(here("Data", "somResults", "hford", "yields", "water", "2021-04-07", "Results_hford_withClusters.csv"))
+  som_wd <- read_csv(here("Data", "somResults", "wade", "yields", "water", "2021-04-07", "Results_wade_withClusters.csv"))
   # NO3
-  som_no3_hf <- read_csv(here("Data", "somResults", "hford", "yields", "NO3", "2021-04-08", "Results_hford_withClusters.csv"))
-  som_no3_wd <- read_csv(here("Data", "somResults", "wade", "yields", "NO3", "2021-04-12", "Results_wade_withClusters.csv"))
+  # som_no3_hf <- read_csv(here("Data", "somResults", "hford", "yields", "NO3", "2021-04-08", "Results_hford_withClusters.csv")) %>% mutate(SOM = "NO3") %>% select(site, SOM, everything())
+  # som_no3_wd <- read_csv(here("Data", "somResults", "wade", "yields", "NO3", "2021-04-12", "Results_wade_withClusters.csv")) %>% mutate(SOM = "NO3") %>% select(site, SOM, everything())
   # SRP
-  som_srp_hf <- read_csv(here("Data", "somResults", "hford", "yields", "SRP", "2021-04-08", "Results_hford_withClusters.csv"))
-  som_srp_wd <- read_csv(here("Data", "somResults", "wade", "yields", "SRP", "2021-04-12", "Results_wade_withClusters.csv"))
+  # som_srp_hf <- read_csv(here("Data", "somResults", "hford", "yields", "SRP", "2021-04-08", "Results_hford_withClusters.csv")) %>% mutate(SOM = "SRP") %>% select(site, SOM, everything())
+  # som_srp_wd <- read_csv(here("Data", "somResults", "wade", "yields", "SRP", "2021-04-12", "Results_wade_withClusters.csv")) %>% mutate(SOM = "SRP") %>% select(site, SOM, everything())
   # Turbidity
-  som_turb_hf <- read_csv(here("Data", "somResults", "hford", "yields", "turb", "2021-04-09", "Results_hford_withClusters.csv"))
-  som_turb_wd <- read_csv(here("Data", "somResults", "wade", "yields", "turb", "2021-04-13", "Results_wade_withClusters.csv"))  
-
+  # som_turb_hf <- read_csv(here("Data", "somResults", "hford", "yields", "turb", "2021-04-09", "Results_hford_withClusters.csv")) %>% mutate(SOM = "turb") %>% select(site, SOM, everything())
+  # som_turb_wd <- read_csv(here("Data", "somResults", "wade", "yields", "turb", "2021-04-13", "Results_wade_withClusters.csv")) %>% mutate(SOM = "turb") %>% select(site, SOM, everything())
 ```
 
 ```{r plot themes and labels, include = FALSE}
@@ -76,7 +75,7 @@ knitr::opts_chunk$set(fig.width = 6, fig.asp = 0.618, out.width = "70%", fig.ali
 # Look at how cluters map onto seasons
   # Hford
     # 4 clusters
-    p_hf_1 <- som_wat_hf %>% 
+    p_hf_1 <- som_hf %>%
       group_by(clust_wat_4cl, season) %>% 
       tally() %>% 
       # Order the seasons
@@ -93,7 +92,7 @@ knitr::opts_chunk$set(fig.width = 6, fig.asp = 0.618, out.width = "70%", fig.ali
         ggtitle("4 cl. model")
 
     # 5 clusters
-    p_hf_2 <- som_wat_hf %>% 
+    p_hf_2 <- som_hf %>%
       group_by(clust_wat_5cl, season) %>% 
       tally() %>% 
       # Order the seasons
@@ -112,7 +111,7 @@ knitr::opts_chunk$set(fig.width = 6, fig.asp = 0.618, out.width = "70%", fig.ali
     
     # 6 clusters
     # NOTE: Colors are rearranged here to make clusters align with above 2 models; if anything changes, change these
-    p_hf_3 <- som_wat_hf %>% 
+    p_hf_3 <- som_hf %>%
       group_by(clust_wat_6cl, season) %>% 
       tally() %>% 
       # Order the seasons
@@ -135,10 +134,11 @@ knitr::opts_chunk$set(fig.width = 6, fig.asp = 0.618, out.width = "70%", fig.ali
       plot_annotation(
         title = "Hungerford"
       )
+    rm(p_hf_1, p_hf_2, p_hf_3)
     
   # Wade
     # 4 clusters
-    p_wd_1 <- som_wat_wd %>% 
+    p_wd_1 <- som_wd %>%
       filter(season != "winter") %>% 
       group_by(clust_wat_4cl, season) %>% 
       tally() %>% 
@@ -156,7 +156,7 @@ knitr::opts_chunk$set(fig.width = 6, fig.asp = 0.618, out.width = "70%", fig.ali
         ggtitle("4 cl. model")
 
     # 5 clusters
-    p_wd_2 <- som_wat_wd %>% 
+    p_wd_2 <- som_wd %>%
       filter(season != "winter") %>% 
       group_by(clust_wat_5cl, season) %>% 
       tally() %>% 
@@ -176,7 +176,7 @@ knitr::opts_chunk$set(fig.width = 6, fig.asp = 0.618, out.width = "70%", fig.ali
     
     # 6 clusters
     # NOTE: Colors are rearranged here to make clusters align with above 2 models; if anything changes, change these
-    p_wd_3 <- som_wat_wd %>% 
+    p_wd_3 <- som_wd %>%
       filter(season != "winter") %>% 
       group_by(clust_wat_6cl, season) %>% 
       tally() %>% 
@@ -199,9 +199,10 @@ knitr::opts_chunk$set(fig.width = 6, fig.asp = 0.618, out.width = "70%", fig.ali
     p_wd_1 + p_wd_2 + p_wd_3 +
       plot_annotation(
         title = "Wade"
-      )    
+      )
+    rm(p_wd_1, p_wd_2, p_wd_3)
   
-# ggsave(here("Plots", "som_wat_hf_clustersBySeason.pdf"), device = "pdf", width = 4, height = 4, units = "in", dpi = 150)
+# ggsave(here("Plots", "som_hf_clustersBySeason.pdf"), device = "pdf", width = 4, height = 4, units = "in", dpi = 150)
 ```
 Distribution of clusters across seasons. Recall that cluster 1 in the first model is not necessarily the same as cluster 1 in another model.
 <br><br>
@@ -214,7 +215,7 @@ Distribution of clusters across seasons. Recall that cluster 1 in the first mode
   ann_text <- data.frame(month_day_rep = "03/26-2", gw_1d_well5 = -0.35, lab = "No \n data",
                          year = factor(2019, levels = c("2018", "2019")))
   # GW Plot
-  p_hf_4 <- som_wat_hf %>% 
+  p_hf_4 <- som_hf %>%
     # Only 2 events in 2017, so cutting out 2017
     filter(year(event_start) != 2017) %>%
      # Add leading zero to single digit months and days
@@ -242,7 +243,7 @@ Distribution of clusters across seasons. Recall that cluster 1 in the first mode
     geom_text(data = ann_text, label = "No \n data")
 
   # 4 cluster model
-  p_hf_5 <- som_wat_hf %>% 
+  p_hf_5 <- som_hf %>%
     # Only 2 events in 2017, so cutting out 2017
     filter(year(event_start) != 2017) %>%
      # Add leading zero to single digit months and days
@@ -278,7 +279,7 @@ Distribution of clusters across seasons. Recall that cluster 1 in the first mode
       ggtitle("4 cl. model")
 
   # 5 cluster model
-  p_hf_6 <- som_wat_hf %>% 
+  p_hf_6 <- som_hf %>%
     # Only 2 events in 2017, so cutting out 2017
     filter(year(event_start) != 2017) %>%
      # Add leading zero to single digit months and days
@@ -315,7 +316,7 @@ Distribution of clusters across seasons. Recall that cluster 1 in the first mode
   
   # 6 cluster model
   # NOTE: Colors are rearranged here to make clusters align with above 2 models; if anything changes, change these
-  p_hf_7 <- som_wat_hf %>% 
+  p_hf_7 <- som_hf %>%
     # Only 2 events in 2017, so cutting out 2017
     filter(year(event_start) != 2017) %>%
      # Add leading zero to single digit months and days
@@ -351,7 +352,6 @@ Distribution of clusters across seasons. Recall that cluster 1 in the first mode
             strip.text.x = element_blank()) +
       ggtitle("6 cl. model")  
 
-
 # Combine the plots into one using the patchwork library
 p_hf_4 / p_hf_5 / p_hf_6 / p_hf_7 +
   plot_layout(
@@ -360,10 +360,11 @@ p_hf_4 / p_hf_5 / p_hf_6 / p_hf_7 +
   plot_annotation(
     title = "Hungerford"
   )
+rm(p_hf_4, p_hf_5, p_hf_6,  p_hf_7)
 
 # WADE
   # GW Plot
-  p_wd_4 <- som_wat_wd %>% 
+  p_wd_4 <- som_wd %>%
     # Only 2 events in 2017, so cutting out 2017
     filter(year(event_start) != 2017) %>%
      # Add leading zero to single digit months and days
@@ -391,7 +392,7 @@ p_hf_4 / p_hf_5 / p_hf_6 / p_hf_7 +
     # geom_text(data = ann_text, label = "No \n data")
 
   # 4 cluster model
-  p_wd_5 <- som_wat_wd %>% 
+  p_wd_5 <- som_wd %>%
     # Only 2 events in 2017, so cutting out 2017
     filter(year(event_start) != 2017) %>%
      # Add leading zero to single digit months and days
@@ -427,7 +428,7 @@ p_hf_4 / p_hf_5 / p_hf_6 / p_hf_7 +
       ggtitle("4 cl. model")
 
   # 5 cluster model
-  p_wd_6 <- som_wat_wd %>% 
+  p_wd_6 <- som_wd %>%
     # Only 2 events in 2017, so cutting out 2017
     filter(year(event_start) != 2017) %>%
      # Add leading zero to single digit months and days
@@ -464,7 +465,7 @@ p_hf_4 / p_hf_5 / p_hf_6 / p_hf_7 +
   
   # 6 cluster model
   # NOTE: Colors are rearranged here to make clusters align with above 2 models; if anything changes, change these
-  p_wd_7 <- som_wat_wd %>% 
+  p_wd_7 <- som_wd %>%
     # Only 2 events in 2017, so cutting out 2017
     filter(year(event_start) != 2017) %>%
      # Add leading zero to single digit months and days
@@ -509,8 +510,9 @@ p_wd_4 / p_wd_5 / p_wd_6 / p_wd_7 +
   plot_annotation(
     title = "Wade"
   )
+rm(p_wd_4, p_wd_5, p_wd_6,  p_wd_7)
 
-# ggsave(here("Plots", "som_wat_hf_eventsByCluster.pdf"), device = "pdf", width = 10, height = 6, units = "in", dpi = 150)
+# ggsave(here("Plots", "som_hf_eventsByCluster.pdf"), device = "pdf", width = 10, height = 6, units = "in", dpi = 150)
 ```
 Time series of water yields colored by cluster. 2017 data not shown because only a few events in fall.
 <br><br>
@@ -519,7 +521,7 @@ Time series of water yields colored by cluster. 2017 data not shown because only
 # Plot boxplots of water yields attributed to each cluster
 # HFORD
   # 4 clusters
-  pl_hf_x1 <- som_wat_hf %>% 
+  pl_hf_x1 <- som_hf %>%
     mutate(year = year(event_start)) %>% 
     filter(year != 2017) %>% 
     ggplot(aes(x = factor(clust_wat_4cl), y = q_mm, color = factor(clust_wat_4cl))) +
@@ -537,7 +539,7 @@ Time series of water yields colored by cluster. 2017 data not shown because only
   ggtitle("HF - 4 cl. model")
 
   # 5 clusters
-  pl_hf_x2 <- som_wat_hf %>% 
+  pl_hf_x2 <- som_hf %>%
     mutate(year = year(event_start)) %>% 
     filter(year != 2017) %>% 
     ggplot(aes(x = factor(clust_wat_5cl), y = q_mm, color = factor(clust_wat_5cl))) +
@@ -555,7 +557,7 @@ Time series of water yields colored by cluster. 2017 data not shown because only
   ggtitle("HF - 5 cl. model")
   
   # 6 clusters
-  pl_hf_x3 <- som_wat_hf %>% 
+  pl_hf_x3 <- som_hf %>%
     mutate(year = year(event_start)) %>% 
     filter(year != 2017) %>% 
     ggplot(aes(x = factor(clust_wat_6cl), y = q_mm, color = factor(clust_wat_6cl))) +
@@ -573,7 +575,7 @@ Time series of water yields colored by cluster. 2017 data not shown because only
   
 # WADE
   # 4 clusters
-  pl_wd_x1 <- som_wat_wd %>% 
+  pl_wd_x1 <- som_wd %>%
     mutate(year = year(event_start)) %>% 
     filter(year != 2017) %>% 
     ggplot(aes(x = factor(clust_wat_4cl), y = q_mm, color = factor(clust_wat_4cl))) +
@@ -592,7 +594,7 @@ Time series of water yields colored by cluster. 2017 data not shown because only
   ggtitle("WD - 4 cl. model")
 
   # 5 clusters
-  pl_wd_x2 <- som_wat_wd %>% 
+  pl_wd_x2 <- som_wd %>%
     mutate(year = year(event_start)) %>% 
     filter(year != 2017) %>% 
     ggplot(aes(x = factor(clust_wat_5cl), y = q_mm, color = factor(clust_wat_5cl))) +
@@ -611,7 +613,7 @@ Time series of water yields colored by cluster. 2017 data not shown because only
   ggtitle("WD - 5 cl. model")
   
   # 6 clusters
-  pl_wd_x3 <- som_wat_wd %>% 
+  pl_wd_x3 <- som_wd %>%
     mutate(year = year(event_start)) %>% 
     filter(year != 2017) %>% 
     ggplot(aes(x = factor(clust_wat_6cl), y = q_mm, color = factor(clust_wat_6cl))) +
@@ -649,7 +651,7 @@ Event water yields attributed to each cluster. 2017 data not shown because only 
 # HFORD
   # Calculate annual measured event yields
   annYields <-
-    som_wat_hf %>% 
+    som_hf %>%
     # Calculate the cummulative sum of yields for each solute, year, and cluster #
     mutate(year = year(event_start)) %>% 
     group_by(year) %>% 
@@ -659,7 +661,7 @@ Event water yields attributed to each cluster. 2017 data not shown because only 
   # Stacked bar graph (year on x-axis; stacks = yields by cluster)
   # Total event water yield per category
   # 4 clusters
-  p_hf_8 <- som_wat_hf %>% 
+  p_hf_8 <- som_hf %>%
     # Calculate the cummulative sum of yields for each year and cluster #
     mutate(year = year(event_start)) %>% 
     group_by(year, clust_wat_4cl) %>% 
@@ -680,7 +682,7 @@ Event water yields attributed to each cluster. 2017 data not shown because only 
       ggtitle("4 cl. model")
   
   # 5 clusters
-  p_hf_9 <- som_wat_hf %>% 
+  p_hf_9 <- som_hf %>%
     # Calculate the cummulative sum of yields for each year and cluster #
     mutate(year = year(event_start)) %>% 
     group_by(year, clust_wat_5cl) %>% 
@@ -702,7 +704,7 @@ Event water yields attributed to each cluster. 2017 data not shown because only 
   
   # 6 clusters
   # NOTE: Colors are rearranged here to make clusters align with above 2 models; if anything changes, change these
-  p_hf_10 <- som_wat_hf %>% 
+  p_hf_10 <- som_hf %>%
     # Calculate the cummulative sum of yields for each year and cluster #
     mutate(year = year(event_start)) %>% 
     group_by(year, clust_wat_6cl) %>% 
@@ -723,7 +725,7 @@ Event water yields attributed to each cluster. 2017 data not shown because only 
 
   # % of event water yield during ice-free season
   # 4 clusters
-  p_hf_11 <- som_wat_hf %>% 
+  p_hf_11 <- som_hf %>%
     # Calculate the cummulative sum of yields for each solute, year, and cluster #
     mutate(year = year(event_start)) %>% 
     # pivot_longer(cols = c(NO3_kg_km2, SRP_kg_km2), names_to = "var", values_to = "value") %>% 
@@ -755,7 +757,7 @@ Event water yields attributed to each cluster. 2017 data not shown because only 
             axis.title.x = element_blank())
   
   # 5 clusters
-  p_hf_12 <- som_wat_hf %>% 
+  p_hf_12 <- som_hf %>%
     # Calculate the cummulative sum of yields for each solute, year, and cluster #
     mutate(year = year(event_start)) %>% 
     # pivot_longer(cols = c(NO3_kg_km2, SRP_kg_km2), names_to = "var", values_to = "value") %>% 
@@ -788,7 +790,7 @@ Event water yields attributed to each cluster. 2017 data not shown because only 
   
   # 6 clusters
   # NOTE: Colors are rearranged here to make clusters align with above 2 models; if anything changes, change these
-  p_hf_13 <- som_wat_hf %>% 
+  p_hf_13 <- som_hf %>%
     # Calculate the cummulative sum of yields for each solute, year, and cluster #
     mutate(year = year(event_start)) %>% 
     # pivot_longer(cols = c(NO3_kg_km2, SRP_kg_km2), names_to = "var", values_to = "value") %>% 
@@ -826,7 +828,7 @@ Event water yields attributed to each cluster. 2017 data not shown because only 
 # WADE
   # Calculate annual measured event yields
   annYields <-
-    som_wat_wd %>% 
+    som_wd %>%
     # Calculate the cummulative sum of yields for each solute, year, and cluster #
     mutate(year = year(event_start)) %>% 
     group_by(year) %>% 
@@ -836,7 +838,7 @@ Event water yields attributed to each cluster. 2017 data not shown because only 
   # Stacked bar graph (year on x-axis; stacks = yields by cluster)
   # Total event water yield per category
   # 4 clusters
-  p_wd_8 <- som_wat_wd %>% 
+  p_wd_8 <- som_wd %>%
     # Calculate the cummulative sum of yields for each year and cluster #
     mutate(year = year(event_start)) %>% 
     group_by(year, clust_wat_4cl) %>% 
@@ -857,7 +859,7 @@ Event water yields attributed to each cluster. 2017 data not shown because only 
       ggtitle("4 cl. model")
   
   # 5 clusters
-  p_wd_9 <- som_wat_wd %>% 
+  p_wd_9 <- som_wd %>%
     # Calculate the cummulative sum of yields for each year and cluster #
     mutate(year = year(event_start)) %>% 
     group_by(year, clust_wat_5cl) %>% 
@@ -879,7 +881,7 @@ Event water yields attributed to each cluster. 2017 data not shown because only 
   
   # 6 clusters
   # NOTE: Colors are rearranged here to make clusters align with above 2 models; if anything changes, change these
-  p_wd_10 <- som_wat_wd %>% 
+  p_wd_10 <- som_wd %>%
     # Calculate the cummulative sum of yields for each year and cluster #
     mutate(year = year(event_start)) %>% 
     group_by(year, clust_wat_6cl) %>% 
@@ -900,7 +902,7 @@ Event water yields attributed to each cluster. 2017 data not shown because only 
 
   # % of event water yield during ice-free season
   # 4 clusters
-  p_wd_11 <- som_wat_wd %>% 
+  p_wd_11 <- som_wd %>%
     # Calculate the cummulative sum of yields for each solute, year, and cluster #
     mutate(year = year(event_start)) %>% 
     # pivot_longer(cols = c(NO3_kg_km2, SRP_kg_km2), names_to = "var", values_to = "value") %>% 
@@ -932,7 +934,7 @@ Event water yields attributed to each cluster. 2017 data not shown because only 
             axis.title.x = element_blank())
   
   # 5 clusters
-  p_wd_12 <- som_wat_wd %>% 
+  p_wd_12 <- som_wd %>% 
     # Calculate the cummulative sum of yields for each solute, year, and cluster #
     mutate(year = year(event_start)) %>% 
     # pivot_longer(cols = c(NO3_kg_km2, SRP_kg_km2), names_to = "var", values_to = "value") %>% 
@@ -965,7 +967,7 @@ Event water yields attributed to each cluster. 2017 data not shown because only 
   
   # 6 clusters
   # NOTE: Colors are rearranged here to make clusters align with above 2 models; if anything changes, change these
-  p_wd_13 <- som_wat_wd %>% 
+  p_wd_13 <- som_wd %>%
     # Calculate the cummulative sum of yields for each solute, year, and cluster #
     mutate(year = year(event_start)) %>% 
     # pivot_longer(cols = c(NO3_kg_km2, SRP_kg_km2), names_to = "var", values_to = "value") %>% 
@@ -1002,3 +1004,4 @@ Event water yields attributed to each cluster. 2017 data not shown because only 
 ```
 Total ice-free season water yield attributed to each cluster.
 <br><br>
+
