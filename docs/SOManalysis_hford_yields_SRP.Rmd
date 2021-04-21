@@ -823,7 +823,9 @@ datWithCluster <- clustAssignmDF %>%
   left_join(hford %>% select(site, event_start, starts_with(c("gw_1d", "gw_4d"))))
   
 # Write this results DF to CSV
-write_csv(datWithCluster, here(paste0(newFolder,"/","Results_", myDataSet, "_", "withClusters",".csv")))
+datWithCluster %>% 
+  mutate(event_start = as.character(event_start)) %>% 
+  write_csv(here(paste0(newFolder,"/","Results_", myDataSet, "_", "withClusters",".csv")))
 ```
 <br><br>
 
