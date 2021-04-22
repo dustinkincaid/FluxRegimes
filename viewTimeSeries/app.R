@@ -151,9 +151,6 @@ server <- function(input, output) {
     x
   })
   
-   observeEvent(input$reset, {
-    session$sendCustomMessage(type = 'plot_set', message = character(0))
-  }) 
   
   # Tab 2: static time series plot
   output$ts_plot_2 <- renderPlot({
