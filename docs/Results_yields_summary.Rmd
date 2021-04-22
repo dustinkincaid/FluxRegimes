@@ -1,0 +1,783 @@
+---
+title: <font size = "5"> Summary figures for all SOM event yield results </font>
+author: "Dustin Kincaid"
+date: "04/21/2021<br><br>"
+output: html_document
+editor_options: 
+  chunk_output_type: console
+---
+
+### Objective  
+##### Create key figures for paper summarizing all results of SOM clustered flux regimes on event water, NO3, SRP, and turbidity yields from Hungerford and Wade Brooks
+<br><br>
+
+```{r setup, include=FALSE, warning=FALSE, message = FALSE}
+# Set defaults
+knitr::opts_chunk$set(fig.width = 6, fig.asp = 0.618, out.width = "70%", fig.align = "center")
+
+# Load packages
+  library("here")      # to make file paths fail less
+  library("tidyverse") # general workhorse
+  library("lubridate") # to work with dates
+  library("patchwork") # arranging multiple plots
+  library("broom")     # for linear regressions
+```
+
+```{r data, include=FALSE, warning=FALSE, message = FALSE}
+# Read in data
+  # Calculated event metrics for each site as calculated in compile_calculate_allVars.R
+  hford <- read_csv(here("Data", "eventMetrics_hford.csv")) %>% 
+    mutate(event_start = ymd_hms(event_start, tz = "Etc/GMT+4"))
+
+  wade <- read_csv(here("Data", "eventMetrics_wade.csv")) %>% 
+    mutate(event_start = ymd_hms(event_start, tz = "Etc/GMT+4"))
+
+  # SOM results from SOManalysis_SITE_yields_VAR.Rmd
+  # Water
+  som_wat_hf <- read_csv(here("Data", "somResults", "hford", "yields", "water", "2021-04-07", "Results_hford_withClusters.csv")) %>% mutate(SOM = "water") %>% select(site, SOM, everything())
+  som_wat_wd <- read_csv(here("Data", "somResults", "wade", "yields", "water", "2021-04-07", "Results_wade_withClusters.csv")) %>% mutate(SOM = "water") %>% select(site, SOM, everything())
+  # NO3
+  som_no3_hf <- read_csv(here("Data", "somResults", "hford", "yields", "NO3", "2021-04-08", "Results_hford_withClusters.csv")) %>% mutate(SOM = "NO3_kg_km2") %>% select(site, SOM, everything())
+  som_no3_wd <- read_csv(here("Data", "somResults", "wade", "yields", "NO3", "2021-04-12", "Results_wade_withClusters.csv")) %>% mutate(SOM = "NO3_kg_km2") %>% select(site, SOM, everything())
+  # SRP
+  som_srp_hf <- read_csv(here("Data", "somResults", "hford", "yields", "SRP", "2021-04-08", "Results_hford_withClusters.csv")) %>% mutate(SOM = "SRP_kg_km2") %>% select(site, SOM, everything())
+  som_srp_wd <- read_csv(here("Data", "somResults", "wade", "yields", "SRP", "2021-04-12", "Results_wade_withClusters.csv")) %>% mutate(SOM = "SRP_kg_km2") %>% select(site, SOM, everything())
+  # Turbidity
+  som_turb_hf <- read_csv(here("Data", "somResults", "hford", "yields", "turb", "2021-04-09", "Results_hford_withClusters.csv")) %>% mutate(SOM = "turb_kg_km2") %>% select(site, SOM, everything())
+  som_turb_wd <- read_csv(here("Data", "somResults", "wade", "yields", "turb", "2021-04-13", "Results_wade_withClusters.csv")) %>% mutate(SOM = "turb_kg_km2") %>% select(site, SOM, everything())
+  
+# Join SOM results into one df per site
+  som_results <- bind_rows(som_wat_hf, som_wat_wd, som_no3_hf, som_no3_wd, som_srp_hf, som_srp_wd, som_turb_hf, som_turb_wd) %>% 
+    rename(clust_4cl = clust_wat_4cl, clust_5cl = clust_wat_5cl, clust_6cl = clust_wat_6cl) %>% 
+    mutate(event_start = ymd_hms(event_start, tz = "Etc/GMT+4"))
+  rm(som_wat_hf, som_wat_wd, som_no3_hf, som_no3_wd, som_srp_hf, som_srp_wd, som_turb_hf, som_turb_wd)
+```
+
+```{r plot themes and labels, include = FALSE}
+# Plotting specifics
+  theme1 <- theme_classic() +
+            theme(axis.text = element_text(size = 11),
+                  axis.title = element_text(size = 12),
+                  axis.title.x = element_text(margin=margin(5,0,0,0)),
+                  axis.title.y = element_text(margin=margin(0,5,0,0)),
+                  legend.title = element_text(size = 9),
+                  legend.text = element_text(size = 9),
+                  strip.text = element_text(size = 12))
+  
+  # A new theme for the hysteresis plots
+  theme2 <- theme(axis.line = element_blank(),
+                  axis.text = element_text(size = 8),
+                  axis.title = element_blank(),
+                  plot.margin = unit(c(1.25,1.25,1.25,1.25), "lines"),
+                  panel.background = element_blank(),
+                  panel.grid.major = element_blank(), 
+                  panel.grid.minor = element_blank(),
+                  legend.text = element_text(size = 6),
+                  legend.key.size = unit(0.1, "in"),
+                  legend.margin = margin(0, 0, 0, 0),
+                  legend.title = element_text(size = 6)) 
+```
+
+##### Ice-free season yields attributed to each cluster
+```{r h2o prop, include = TRUE, echo = FALSE, message = FALSE, warning = FALSE, fig.width = 8, fig.asp = .9, out.width = "80%"}
+# Plot total yield attributed to each cluster
+# HFORD
+  # Calculate annual measured event yields
+  annYields <-
+    som_results %>%
+    # Calculate the cummulative sum of yields for each solute, year, and cluster #
+    mutate(year = year(event_start)) %>% 
+    group_by(year) %>% 
+    summarize(ann_NO3_yield = sum(NO3_kg_km2, na.rm = TRUE)) %>% 
+    ungroup()
+
+  # Stacked bar graph (year on x-axis; stacks = yields by cluster)
+  # Total event water yield per category
+  # 4 clusters
+  p_hf_8 <- som_hf %>%
+    # Calculate the cummulative sum of yields for each year and cluster #
+    mutate(year = year(event_start)) %>% 
+    group_by(year, clust_wat_4cl) %>% 
+    summarize(tot_yield = sum(NO3_kg_km2, na.rm = TRUE)) %>% 
+    ungroup() %>% 
+    # Exclude 2017 events  
+    filter(year != 2017) %>% 
+    ggplot(aes(x = factor(year), y = tot_yield, fill = factor(clust_wat_4cl))) +
+      geom_bar(position = "stack", stat = "identity") +
+      scale_fill_manual(name = "Cluster",
+                        values = c("#999999", "#E69F00", "#56B4E9", "#009E73", "#0072B2", "#D55E00", "#CC79A7")) +
+      ylab(expression(atop(Event~NO[3]^-{}~yield, "during ice-free season"))) +
+      xlab("Year") +
+      theme1 +
+      theme(legend.position = "none",
+            axis.text.x = element_blank(),
+            axis.title.x = element_blank()) +
+      ggtitle("4 cl. model")
+  
+  # 5 clusters
+  p_hf_9 <- som_hf %>%
+    # Calculate the cummulative sum of yields for each year and cluster #
+    mutate(year = year(event_start)) %>% 
+    group_by(year, clust_wat_5cl) %>% 
+    summarize(tot_yield = sum(NO3_kg_km2, na.rm = TRUE)) %>% 
+    ungroup() %>% 
+    # Exclude 2017 events  
+    filter(year != 2017) %>% 
+    ggplot(aes(x = factor(year), y = tot_yield, fill = factor(clust_wat_5cl))) +
+      geom_bar(position = "stack", stat = "identity") +
+      scale_fill_manual(name = "Cluster",
+                        values = c("#999999", "#E69F00", "#56B4E9", "#009E73", "#0072B2", "#D55E00", "#CC79A7")) +
+      ylab(expression(atop(Event~NO[3]^-{}~yield, "during ice-free season"))) +
+      xlab("Year") +
+      theme1 +
+      theme(legend.position = "none",
+            axis.text.x = element_blank(),
+            axis.title.x = element_blank()) +
+      ggtitle("5 cl. model") 
+  
+  # 6 clusters
+  # NOTE: Colors are rearranged here to make clusters align with above 2 models; if anything changes, change these
+  p_hf_10 <- som_hf %>%
+    # Calculate the cummulative sum of yields for each year and cluster #
+    mutate(year = year(event_start)) %>% 
+    group_by(year, clust_wat_6cl) %>% 
+    summarize(tot_yield = sum(NO3_kg_km2, na.rm = TRUE)) %>% 
+    ungroup() %>% 
+    # Exclude 2017 events  
+    filter(year != 2017) %>% 
+    ggplot(aes(x = factor(year), y = tot_yield, fill = factor(clust_wat_6cl))) +
+      geom_bar(position = "stack", stat = "identity") +
+      scale_fill_manual(name = "Cluster",
+                        # These have been rearranged for this model
+                        values = c("#0072B2", "#009E73", "#E69F00", "#D55E00", "#56B4E9", "#999999", "#CC79A7")) +
+      ylab(expression(atop(Event~NO[3]^-{}~yield, "during ice-free season"))) +
+      xlab("Year") +
+      theme1 +
+      theme(legend.position = "none") +
+      ggtitle("6 cl. model")    
+
+  # % of event water yield during ice-free season
+  # 4 clusters
+  p_hf_11 <- som_hf %>%
+    # Calculate the cummulative sum of yields for each solute, year, and cluster #
+    mutate(year = year(event_start)) %>% 
+    # pivot_longer(cols = c(NO3_kg_km2, SRP_kg_km2), names_to = "var", values_to = "value") %>% 
+    # group_by(year, cluster, var) %>% 
+    group_by(year, clust_wat_4cl) %>% 
+    summarize(tot_NO3_yield = sum(NO3_kg_km2, na.rm = TRUE)) %>% 
+    ungroup() %>% 
+    # Calculate proportion of total annual yield
+    full_join(annYields) %>% 
+    mutate(prop_NO3_yield = tot_NO3_yield/ann_NO3_yield) %>% 
+    # Exclude 2017 events
+    filter(year != 2017) %>% 
+    ggplot(aes(x = factor(year), y = prop_NO3_yield*100, fill = factor(clust_wat_4cl))) +
+      # facet_wrap(~var, ncol = 2, scales = "free_y", labeller = labeller(var = labels_var)) +
+      geom_bar(position = "stack", stat = "identity") +
+      # scale_fill_manual(name = "Cluster",
+      #                   values = c("#999999", "#E69F00", "#56B4E9", "#009E73", "#0072B2", "#D55E00", "#CC79A7"),
+      #                   labels = c("Warm, dry soil, big rain", 
+      #                              "Very wet soil, rain/melt",
+      #                              "Cold, dry soil, mostly melt",
+      #                              "Low sun, wet soil, low-int. rain")) +
+      scale_fill_manual(name = "Cluster",
+                        values = c("#999999", "#E69F00", "#56B4E9", "#009E73", "#0072B2", "#D55E00", "#CC79A7")) +
+      ylab(expression(atop('%'~event~NO[3]^-{}~yield, "during ice-free season"))) +
+      xlab("Year") +
+      theme1 +
+      theme(axis.text.x = element_blank(),
+            axis.title.x = element_blank())
+  
+  # 5 clusters
+  p_hf_12 <- som_hf %>%
+    # Calculate the cummulative sum of yields for each solute, year, and cluster #
+    mutate(year = year(event_start)) %>% 
+    # pivot_longer(cols = c(NO3_kg_km2, SRP_kg_km2), names_to = "var", values_to = "value") %>% 
+    # group_by(year, cluster, var) %>% 
+    group_by(year, clust_wat_5cl) %>% 
+    summarize(tot_NO3_yield = sum(NO3_kg_km2, na.rm = TRUE)) %>% 
+    ungroup() %>% 
+    # Calculate proportion of total annual yield
+    full_join(annYields) %>% 
+    mutate(prop_NO3_yield = tot_NO3_yield/ann_NO3_yield) %>% 
+    # Exclude 2017 events
+    filter(year != 2017) %>% 
+    ggplot(aes(x = factor(year), y = prop_NO3_yield*100, fill = factor(clust_wat_5cl))) +
+      # facet_wrap(~var, ncol = 2, scales = "free_y", labeller = labeller(var = labels_var)) +
+      geom_bar(position = "stack", stat = "identity") +
+      # scale_fill_manual(name = "Cluster",
+      #                   values = c("#999999", "#E69F00", "#56B4E9", "#009E73", "#0072B2", "#D55E00", "#CC79A7"),
+      #                   labels = c("Warm, dry soil, big rain", 
+      #                              "Very wet soil, rain/melt",
+      #                              "Cold, dry soil, mostly melt",
+      #                              "Low sun, wet soil, low-int. rain")) +
+      scale_fill_manual(name = "Cluster",
+                        values = c("#999999", "#E69F00", "#56B4E9", "#009E73", "#0072B2", "#D55E00", "#CC79A7")) +
+      ylab(expression(atop('%'~event~NO[3]^-{}~yield, "during ice-free season"))) +
+      xlab("Year") +
+      theme1 +
+      theme(axis.text.x = element_blank(),
+            axis.title.x = element_blank())
+  
+  # 6 clusters
+  # NOTE: Colors are rearranged here to make clusters align with above 2 models; if anything changes, change these
+  p_hf_13 <- som_hf %>%
+    # Calculate the cummulative sum of yields for each solute, year, and cluster #
+    mutate(year = year(event_start)) %>% 
+    # pivot_longer(cols = c(NO3_kg_km2, SRP_kg_km2), names_to = "var", values_to = "value") %>% 
+    # group_by(year, cluster, var) %>% 
+    group_by(year, clust_wat_6cl) %>% 
+    summarize(tot_NO3_yield = sum(NO3_kg_km2, na.rm = TRUE)) %>% 
+    ungroup() %>% 
+    # Calculate proportion of total annual yield
+    full_join(annYields) %>% 
+    mutate(prop_NO3_yield = tot_NO3_yield/ann_NO3_yield) %>% 
+    # Exclude 2017 events
+    filter(year != 2017) %>% 
+    ggplot(aes(x = factor(year), y = prop_NO3_yield*100, fill = factor(clust_wat_6cl))) +
+      # facet_wrap(~var, ncol = 2, scales = "free_y", labeller = labeller(var = labels_var)) +
+      geom_bar(position = "stack", stat = "identity") +
+      # scale_fill_manual(name = "Cluster",
+      #                   values = c("#999999", "#E69F00", "#56B4E9", "#009E73", "#0072B2", "#D55E00", "#CC79A7"),
+      #                   labels = c("Warm, dry soil, big rain", 
+      #                              "Very wet soil, rain/melt",
+      #                              "Cold, dry soil, mostly melt",
+      #                              "Low sun, wet soil, low-int. rain")) +
+      scale_fill_manual(name = "Cluster",
+                        values = c("#999999", "#E69F00", "#56B4E9", "#009E73", "#0072B2", "#D55E00", "#CC79A7")) +
+      ylab(expression(atop('%'~event~NO[3]^-{}~yield, "during ice-free season"))) +
+      xlab("Year") +
+      theme1  
+  
+  # Combine into one plot
+  (p_hf_8 + p_hf_11) / (p_hf_9 + p_hf_12) / (p_hf_10 + p_hf_13) +
+    plot_annotation(
+      title = "Hungerford"
+    )
+  
+# WADE
+  # Calculate annual measured event yields
+  annYields <-
+    som_wd %>%
+    # Calculate the cummulative sum of yields for each solute, year, and cluster #
+    mutate(year = year(event_start)) %>% 
+    group_by(year) %>% 
+    summarize(ann_NO3_yield = sum(NO3_kg_km2, na.rm = TRUE)) %>% 
+    ungroup()
+
+  # Stacked bar graph (year on x-axis; stacks = yields by cluster)
+  # Total event water yield per category
+  # 4 clusters
+  p_wd_8 <- som_wd %>%
+    # Calculate the cummulative sum of yields for each year and cluster #
+    mutate(year = year(event_start)) %>% 
+    group_by(year, clust_wat_4cl) %>% 
+    summarize(tot_yield = sum(NO3_kg_km2, na.rm = TRUE)) %>% 
+    ungroup() %>% 
+    # Exclude 2017 events  
+    filter(year != 2017) %>% 
+    ggplot(aes(x = factor(year), y = tot_yield, fill = factor(clust_wat_4cl))) +
+      geom_bar(position = "stack", stat = "identity") +
+      scale_fill_manual(name = "Cluster",
+                        values = c("#999999", "#E69F00", "#56B4E9", "#009E73", "#0072B2", "#D55E00", "#CC79A7")) +
+      ylab(expression(atop(Event~NO[3]^-{}~yield, "during ice-free season"))) +
+      xlab("Year") +
+      theme1 +
+      theme(legend.position = "none",
+            axis.text.x = element_blank(),
+            axis.title.x = element_blank()) +
+      ggtitle("4 cl. model")
+  
+  # 5 clusters
+  p_wd_9 <- som_wd %>%
+    # Calculate the cummulative sum of yields for each year and cluster #
+    mutate(year = year(event_start)) %>% 
+    group_by(year, clust_wat_5cl) %>% 
+    summarize(tot_yield = sum(NO3_kg_km2, na.rm = TRUE)) %>% 
+    ungroup() %>% 
+    # Exclude 2017 events  
+    filter(year != 2017) %>% 
+    ggplot(aes(x = factor(year), y = tot_yield, fill = factor(clust_wat_5cl))) +
+      geom_bar(position = "stack", stat = "identity") +
+      scale_fill_manual(name = "Cluster",
+                        values = c("#999999", "#E69F00", "#56B4E9", "#009E73", "#0072B2", "#D55E00", "#CC79A7")) +
+      ylab(expression(atop(Event~NO[3]^-{}~yield, "during ice-free season"))) +
+      xlab("Year") +
+      theme1 +
+      theme(legend.position = "none",
+            axis.text.x = element_blank(),
+            axis.title.x = element_blank()) +
+      ggtitle("5 cl. model") 
+  
+  # 6 clusters
+  # NOTE: Colors are rearranged here to make clusters align with above 2 models; if anything changes, change these
+  p_wd_10 <- som_wd %>%
+    # Calculate the cummulative sum of yields for each year and cluster #
+    mutate(year = year(event_start)) %>% 
+    group_by(year, clust_wat_6cl) %>% 
+    summarize(tot_yield = sum(NO3_kg_km2, na.rm = TRUE)) %>% 
+    ungroup() %>% 
+    # Exclude 2017 events  
+    filter(year != 2017) %>% 
+    ggplot(aes(x = factor(year), y = tot_yield, fill = factor(clust_wat_6cl))) +
+      geom_bar(position = "stack", stat = "identity") +
+      scale_fill_manual(name = "Cluster",
+                        # These have been rearranged for this model
+                        values = c("#0072B2", "#009E73", "#E69F00", "#D55E00", "#56B4E9", "#999999", "#CC79A7")) +
+      ylab(expression(atop(Event~NO[3]^-{}~yield, "during ice-free season"))) +
+      xlab("Year") +
+      theme1 +
+      theme(legend.position = "none") +
+      ggtitle("6 cl. model")    
+
+  # % of event water yield during ice-free season
+  # 4 clusters
+  p_wd_11 <- som_wd %>%
+    # Calculate the cummulative sum of yields for each solute, year, and cluster #
+    mutate(year = year(event_start)) %>% 
+    # pivot_longer(cols = c(NO3_kg_km2, SRP_kg_km2), names_to = "var", values_to = "value") %>% 
+    # group_by(year, cluster, var) %>% 
+    group_by(year, clust_wat_4cl) %>% 
+    summarize(tot_NO3_yield = sum(NO3_kg_km2, na.rm = TRUE)) %>% 
+    ungroup() %>% 
+    # Calculate proportion of total annual yield
+    full_join(annYields) %>% 
+    mutate(prop_NO3_yield = tot_NO3_yield/ann_NO3_yield) %>% 
+    # Exclude 2017 events
+    filter(year != 2017) %>% 
+    ggplot(aes(x = factor(year), y = prop_NO3_yield*100, fill = factor(clust_wat_4cl))) +
+      # facet_wrap(~var, ncol = 2, scales = "free_y", labeller = labeller(var = labels_var)) +
+      geom_bar(position = "stack", stat = "identity") +
+      # scale_fill_manual(name = "Cluster",
+      #                   values = c("#999999", "#E69F00", "#56B4E9", "#009E73", "#0072B2", "#D55E00", "#CC79A7"),
+      #                   labels = c("Warm, dry soil, big rain", 
+      #                              "Very wet soil, rain/melt",
+      #                              "Cold, dry soil, mostly melt",
+      #                              "Low sun, wet soil, low-int. rain")) +
+      scale_fill_manual(name = "Cluster",
+                        values = c("#999999", "#E69F00", "#56B4E9", "#009E73", "#0072B2", "#D55E00", "#CC79A7")) +
+      ylab(expression(atop('%'~event~NO[3]^-{}~yield, "during ice-free season"))) +
+      xlab("Year") +
+      theme1 +
+      theme(axis.text.x = element_blank(),
+            axis.title.x = element_blank())
+  
+  # 5 clusters
+  p_wd_12 <- som_wd %>% 
+    # Calculate the cummulative sum of yields for each solute, year, and cluster #
+    mutate(year = year(event_start)) %>% 
+    # pivot_longer(cols = c(NO3_kg_km2, SRP_kg_km2), names_to = "var", values_to = "value") %>% 
+    # group_by(year, cluster, var) %>% 
+    group_by(year, clust_wat_5cl) %>% 
+    summarize(tot_NO3_yield = sum(NO3_kg_km2, na.rm = TRUE)) %>% 
+    ungroup() %>% 
+    # Calculate proportion of total annual yield
+    full_join(annYields) %>% 
+    mutate(prop_NO3_yield = tot_NO3_yield/ann_NO3_yield) %>% 
+    # Exclude 2017 events
+    filter(year != 2017) %>% 
+    ggplot(aes(x = factor(year), y = prop_NO3_yield*100, fill = factor(clust_wat_5cl))) +
+      # facet_wrap(~var, ncol = 2, scales = "free_y", labeller = labeller(var = labels_var)) +
+      geom_bar(position = "stack", stat = "identity") +
+      # scale_fill_manual(name = "Cluster",
+      #                   values = c("#999999", "#E69F00", "#56B4E9", "#009E73", "#0072B2", "#D55E00", "#CC79A7"),
+      #                   labels = c("Warm, dry soil, big rain", 
+      #                              "Very wet soil, rain/melt",
+      #                              "Cold, dry soil, mostly melt",
+      #                              "Low sun, wet soil, low-int. rain")) +
+      scale_fill_manual(name = "Cluster",
+                        values = c("#999999", "#E69F00", "#56B4E9", "#009E73", "#0072B2", "#D55E00", "#CC79A7")) +
+      ylab(expression(atop('%'~event~NO[3]^-{}~yield, "during ice-free season"))) +
+      xlab("Year") +
+      theme1 +
+      theme(axis.text.x = element_blank(),
+            axis.title.x = element_blank())
+  
+  # 6 clusters
+  # NOTE: Colors are rearranged here to make clusters align with above 2 models; if anything changes, change these
+  p_wd_13 <- som_wd %>%
+    # Calculate the cummulative sum of yields for each solute, year, and cluster #
+    mutate(year = year(event_start)) %>% 
+    # pivot_longer(cols = c(NO3_kg_km2, SRP_kg_km2), names_to = "var", values_to = "value") %>% 
+    # group_by(year, cluster, var) %>% 
+    group_by(year, clust_wat_6cl) %>% 
+    summarize(tot_NO3_yield = sum(NO3_kg_km2, na.rm = TRUE)) %>% 
+    ungroup() %>% 
+    # Calculate proportion of total annual yield
+    full_join(annYields) %>% 
+    mutate(prop_NO3_yield = tot_NO3_yield/ann_NO3_yield) %>% 
+    # Exclude 2017 events
+    filter(year != 2017) %>% 
+    ggplot(aes(x = factor(year), y = prop_NO3_yield*100, fill = factor(clust_wat_6cl))) +
+      # facet_wrap(~var, ncol = 2, scales = "free_y", labeller = labeller(var = labels_var)) +
+      geom_bar(position = "stack", stat = "identity") +
+      # scale_fill_manual(name = "Cluster",
+      #                   values = c("#999999", "#E69F00", "#56B4E9", "#009E73", "#0072B2", "#D55E00", "#CC79A7"),
+      #                   labels = c("Warm, dry soil, big rain", 
+      #                              "Very wet soil, rain/melt",
+      #                              "Cold, dry soil, mostly melt",
+      #                              "Low sun, wet soil, low-int. rain")) +
+      scale_fill_manual(name = "Cluster",
+                        values = c("#999999", "#E69F00", "#56B4E9", "#009E73", "#0072B2", "#D55E00", "#CC79A7")) +
+      ylab(expression(atop('%'~event~NO[3]^-{}~yield, "during ice-free season"))) +
+      xlab("Year") +
+      theme1  
+  
+  # Combine into one plot
+  (p_wd_8 + p_wd_11) / (p_wd_9 + p_wd_12) / (p_wd_10 + p_wd_13) +
+    plot_annotation(
+      title = "Wade"
+    )  
+```
+Total ice-free season water yield attributed to each cluster.
+<br><br>
+
+```{r cluster, include = TRUE, echo = FALSE, message = FALSE, warning = FALSE, fig.asp = 0.7}
+# Plot boxplots of water yields attributed to each cluster
+# HFORD
+  # 4 clusters
+  pl_hf_x1 <- som_hf %>%
+    mutate(year = year(event_start)) %>% 
+    filter(year != 2017) %>% 
+    ggplot(aes(x = factor(clust_wat_4cl), y = NO3_kg_km2, color = factor(clust_wat_4cl))) +
+    facet_wrap(~year) +
+    geom_boxplot() +
+    scale_color_manual(name = "Cluster",
+                      values = c("#999999", "#E69F00", "#56B4E9", "#009E73", "#0072B2", "#D55E00", "#CC79A7")) +
+    ylab(expression(atop(Event~NO[3]^-{}~yield, (kg~N~km^{-2})))) +
+    xlab("Cluster") +
+    theme1 +
+    theme(legend.position = "none",
+          strip.background = element_blank(),
+          strip.text.x = element_text(size = 12),
+          axis.title.x = element_blank()) +
+  ggtitle("HF - 4 cl. model")
+
+  # 5 clusters
+  pl_hf_x2 <- som_hf %>%
+    mutate(year = year(event_start)) %>% 
+    filter(year != 2017) %>% 
+    ggplot(aes(x = factor(clust_wat_5cl), y = NO3_kg_km2, color = factor(clust_wat_5cl))) +
+    facet_wrap(~year) +
+    geom_boxplot() +
+    scale_color_manual(name = "Cluster",
+                      values = c("#999999", "#E69F00", "#56B4E9", "#009E73", "#0072B2", "#D55E00", "#CC79A7")) +
+    ylab(expression(atop(Event~NO[3]^-{}~yield, (kg~N~km^{-2})))) +
+    xlab("Cluster") +
+    theme1 +
+    theme(legend.position = "none",
+          strip.background = element_blank(),
+          strip.text.x = element_blank(),
+          axis.title.x = element_blank()) +
+  ggtitle("HF - 5 cl. model")
+  
+  # 6 clusters
+  pl_hf_x3 <- som_hf %>%
+    mutate(year = year(event_start)) %>% 
+    filter(year != 2017) %>% 
+    ggplot(aes(x = factor(clust_wat_6cl), y = NO3_kg_km2, color = factor(clust_wat_6cl))) +
+    facet_wrap(~year) +
+    geom_boxplot() +
+    scale_color_manual(name = "Cluster",
+                      values = c("#999999", "#E69F00", "#56B4E9", "#009E73", "#0072B2", "#D55E00", "#CC79A7")) +
+    ylab(expression(atop(Event~NO[3]^-{}~yield, (kg~N~km^{-2})))) +
+    xlab("Cluster") +
+    theme1 +
+    theme(legend.position = "none",
+          strip.background = element_blank(),
+          strip.text.x = element_blank()) +
+  ggtitle("HF - 6 cl. model")
+  
+# WADE
+  # 4 clusters
+  pl_wd_x1 <- som_wd %>%
+    mutate(year = year(event_start)) %>% 
+    filter(year != 2017) %>% 
+    ggplot(aes(x = factor(clust_wat_4cl), y = NO3_kg_km2, color = factor(clust_wat_4cl))) +
+    facet_wrap(~year) +
+    geom_boxplot() +
+    scale_color_manual(name = "Cluster",
+                      values = c("#999999", "#E69F00", "#56B4E9", "#009E73", "#0072B2", "#D55E00", "#CC79A7")) +
+    ylab(expression(atop(Event~NO[3]^-{}~yield, (kg~N~km^{-2})))) +
+    xlab("Cluster") +
+    theme1 +
+    theme(legend.position = "none",
+          strip.background = element_blank(),
+          strip.text.x = element_text(size = 12),
+          axis.title.x = element_blank(),
+          axis.title.y = element_blank()) +
+  ggtitle("WD - 4 cl. model")
+
+  # 5 clusters
+  pl_wd_x2 <- som_wd %>%
+    mutate(year = year(event_start)) %>% 
+    filter(year != 2017) %>% 
+    ggplot(aes(x = factor(clust_wat_5cl), y = NO3_kg_km2, color = factor(clust_wat_5cl))) +
+    facet_wrap(~year) +
+    geom_boxplot() +
+    scale_color_manual(name = "Cluster",
+                      values = c("#999999", "#E69F00", "#56B4E9", "#009E73", "#0072B2", "#D55E00", "#CC79A7")) +
+    ylab(expression(atop(Event~NO[3]^-{}~yield, (kg~N~km^{-2})))) +
+    xlab("Cluster") +
+    theme1 +
+    theme(legend.position = "none",
+          strip.background = element_blank(),
+          strip.text.x = element_blank(),
+          axis.title.x = element_blank(),
+          axis.title.y = element_blank()) +
+  ggtitle("WD - 5 cl. model")
+  
+  # 6 clusters
+  pl_wd_x3 <- som_wd %>%
+    mutate(year = year(event_start)) %>% 
+    filter(year != 2017) %>% 
+    ggplot(aes(x = factor(clust_wat_6cl), y = NO3_kg_km2, color = factor(clust_wat_6cl))) +
+    facet_wrap(~year) +
+    geom_boxplot() +
+    scale_color_manual(name = "Cluster",
+                      values = c("#999999", "#E69F00", "#56B4E9", "#009E73", "#0072B2", "#D55E00", "#CC79A7")) +
+    ylab(expression(atop(Event~NO[3]^-{}~yield, (kg~N~km^{-2})))) +
+    xlab("Cluster") +
+    theme1 +
+    theme(legend.position = "none",
+          strip.background = element_blank(),
+          strip.text.x = element_blank(),
+          axis.title.y = element_blank()) +
+  ggtitle("WD - 6 cl. model")
+  
+# Combine plots
+  pl_c_hf1 <- pl_hf_x1 / pl_hf_x2 / pl_hf_x3 +
+    plot_annotation(
+      title = "Hungerford"
+    )
+  
+  pl_c_wd1 <- pl_wd_x1 / pl_wd_x2 / pl_wd_x3 +
+    plot_annotation(
+      title = "Wade"
+    ) 
+  
+  pl_c_hf1 | pl_c_wd1
+```
+Event water yields attributed to each cluster. 2017 data not shown because only a few events in fall. Recall that cluster 1 in the first model is not necessarily the same as cluster 1 in another model.
+<br><br>
+
+##### Relationship between event NO3, SRP, or turbidity yield and event water yield for each season
+```{r regressions, include=FALSE, warning=FALSE, message = FALSE}
+# Which events and yields have an SOM cluster assigned (excluding SOM water yield)
+yesCluster <- 
+  som_results %>% 
+  filter(SOM != "water") %>% 
+  select(site, SOM, season, event_start, clust_4cl, clust_5cl, clust_6cl) %>% 
+  # pivot_wider(names_from = SOM, values_from = clust_4cl) %>%
+  mutate(clust_YN = ifelse(!is.na(clust_4cl), "yes", "no")) %>% 
+  rename(var = SOM)
+
+# Join to a df with event info and yield estimates to filter out events with not assigned cluster for each var (NO3, SRP, turb)
+datWithClusters <-
+  bind_rows(hford, wade) %>% 
+  select(site, season, event_start, ends_with("km2"), q_mm) %>% 
+  pivot_longer(cols = c(NO3_kg_km2, SRP_kg_km2, turb_kg_km2), names_to = "var", values_to = "yield") %>% 
+  left_join(yesCluster, by = c("site", "season", "event_start", "var")) %>% 
+  filter(clust_YN == "yes") %>% 
+  select(-clust_YN)
+  
+# Regress event yield on event water yield
+# Get stats on coefficient estimates
+lm_results_coef <- 
+  datWithClusters %>% 
+  # Group and nest these groupings
+  group_by(site, season, var) %>% 
+  nest() %>% 
+  mutate(model = map(data, ~ lm(yield ~ q_mm, data = .x)),
+         tidied = map(model, tidy)) %>% 
+  unnest(tidied) %>% 
+  filter(term != "(Intercept)") %>% 
+  select(-c(data, model)) %>% 
+  ungroup()
+
+# Get R^2 and other summary stats
+lm_results_r2 <-
+  datWithClusters %>% 
+  # Group and nest these groupings
+  group_by(site, season, var) %>% 
+  nest() %>% 
+  mutate(model = map(data, ~ lm(yield ~ q_mm, data = .x)),
+         glanced = map(model, glance),
+         augmented = map(model, augment)) %>% 
+  unnest(glanced) %>% 
+  select(-c(data, model)) %>% 
+  ungroup()
+
+# Join these together
+lm_results <- 
+  full_join(lm_results_coef, lm_results_r2, by = c("var", "site", "season")) %>% 
+  unnest(augmented)
+rm(lm_results_coef, lm_results_r2)
+
+# Add event & SOM cluster assign info to this df
+allData <- 
+  lm_results %>% 
+  left_join(datWithClusters, by = c("site", "season", "var", "yield", "q_mm")) %>% 
+  left_join(som_results %>% 
+              rename(var = SOM) %>% 
+              select(-c(NO3_kg_km2, SRP_kg_km2, turb_kg_km2))) %>% 
+  select(site, event_start, starts_with("clust"), everything()) %>% 
+  arrange(site, event_start)
+
+# allData %>% 
+#   mutate(event_start = as.character(event_start)) %>% 
+#   write_csv("Data/results_clusters_withLinearRegressions.csv")
+
+```
+
+```{r, include = TRUE, echo = FALSE, message = FALSE, warning = FALSE}
+# Plot NO3, SRP, & turbidity yields against water yield
+# HFORD - NOTE: might need to do segmented regression for turbidity fit
+  # Faceted by solute
+  pl_1 <- 
+    allData %>% 
+    filter(site == "Hungerford") %>% 
+    mutate(season = factor(season, levels = c("spring", "summer", "fall"), labels = c("Spring", "Summer", "Fall"))) %>% 
+    # Adding the expressions as labels requires that you add labeller = label_parsed in the facet_* call below
+    mutate(var = factor(var, levels = c("NO3_kg_km2", "SRP_kg_km2", "turb_kg_km2"), labels = c(expression(NO[3]^-{}~(kg~N~km^{-2})) , expression(SRP~(kg~P~km^{-2})), expression(Turb.~(Sigma~NTU~km^{-2}))))) %>% 
+    ggplot(aes(x = q_mm, y = yield)) +
+      facet_grid(var~season, scales = "free", labeller = label_parsed) +
+      geom_smooth(method=lm, se=FALSE, color = "black") +
+      geom_point(aes(color = factor(clust_5cl), shape = factor(year(event_start))), size = 2, stroke = 0.75, alpha = 0.8) +
+      scale_shape_manual(name = "Season",
+                         values = c(19, 17, 15)) +
+      scale_color_manual(name = "Cluster",
+                        values = c("#999999", "#E69F00", "#56B4E9", "#009E73", "#0072B2", "#D55E00", "#CC79A7")) +
+      ylab(expression(Event~NO[3]^-{}~or~SRP~or~turb.~yield)) +
+      xlab("Event water yield (mm)") +
+      theme1 +
+      theme(strip.background = element_blank(),
+            legend.position = "none") +
+      ggtitle("Hungerford")
+
+  # Faceted by solute and season
+  pl_2 <- 
+    allData %>% 
+    filter(site == "Hungerford") %>% 
+    mutate(season = factor(season, levels = c("spring", "summer", "fall"), labels = c("Spring", "Summer", "Fall"))) %>% 
+    # Adding the expressions as labels requires that you add labeller = label_parsed in the facet_* call below
+    mutate(var = factor(var, levels = c("NO3_kg_km2", "SRP_kg_km2", "turb_kg_km2"), labels = c(expression(NO[3]^-{}~(kg~N~km^{-2})) , expression(SRP~(kg~P~km^{-2})), expression(Turb.~(Sigma~NTU~km^{-2}))))) %>% 
+    ggplot(aes(x = q_mm, y = yield)) +
+      facet_grid(var~season, scales = "free", labeller = label_parsed) +
+      geom_smooth(method=lm, se=FALSE, color = "black") +
+      geom_point(aes(color = factor(clust_5cl), shape = factor(year(event_start))), size = 2, stroke = 0.75, alpha = 0.8) +
+      scale_shape_manual(name = "Year",
+                         values = c(19, 17, 15)) +
+      scale_color_manual(name = "Cluster",
+                        values = c("#999999", "#E69F00", "#56B4E9", "#009E73", "#0072B2", "#D55E00", "#CC79A7")) +
+      ylab(expression(Event~NO[3]^-{}~or~SRP~or~turb.~yield)) +
+      xlab("Event water yield (mm)") +
+      theme1 +
+      theme(strip.background = element_blank(),
+            axis.title.x = element_blank(),
+            legend.position = "none") +
+      ggtitle("Hungerford")
+  
+    # Plot standardized residuals
+    pl_3 <-
+      allData %>% 
+      filter(site == "Hungerford") %>% 
+      mutate(season = factor(season, levels = c("spring", "summer", "fall"), labels = c("Spring", "Summer", "Fall"))) %>% 
+      mutate(var = factor(var, levels = c("NO3_kg_km2", "SRP_kg_km2", "turb_kg_km2"), labels = c(expression(NO[3]^-{}~(kg~N~km^{-2})) , expression(SRP~(kg~P~km^{-2})), expression(Turb.~(Sigma~NTU~km^{-2}))))) %>%   
+      ggplot(aes(x = q_mm, y = .std.resid)) +
+      facet_grid(var~season, scales = "free", labeller = label_parsed) +
+      geom_hline(yintercept = 0, color = "black", linetype = "dashed") +
+      geom_hline(yintercept = -2, color = "gray80", linetype = "dashed") +
+      geom_hline(yintercept = 2, color = "gray80", linetype = "dashed") +
+      geom_point(aes(color = factor(clust_5cl), shape = factor(year(event_start))), size = 2, stroke = 0.75, alpha = 0.8) +
+      scale_shape_manual(name = "Year",
+                   values = c(19, 17, 15)) +
+      scale_color_manual(name = "Cluster",
+                        values = c("#999999", "#E69F00", "#56B4E9", "#009E73", "#0072B2", "#D55E00", "#CC79A7")) +  
+      ylab("Std. residuals") +
+      xlab("Event water yield (mm)") +
+      theme1 +
+      theme(strip.background = element_blank(),
+            axis.title.x = element_blank(),
+            strip.text.x = element_blank())
+
+# WADE - NOTE: might need to do segmented regression for turbidity fit
+  # Faceted by solute
+  pl_4 <- 
+    allData %>% 
+    filter(site == "Wade") %>% 
+    filter(season != "winter") %>% 
+    mutate(season = factor(season, levels = c("spring", "summer", "fall"), labels = c("Spring", "Summer", "Fall"))) %>% 
+    # Adding the expressions as labels requires that you add labeller = label_parsed in the facet_* call below
+    mutate(var = factor(var, levels = c("NO3_kg_km2", "SRP_kg_km2", "turb_kg_km2"), labels = c(expression(NO[3]^-{}~(kg~N~km^{-2})) , expression(SRP~(kg~P~km^{-2})), expression(Turb.~(Sigma~NTU~km^{-2}))))) %>% 
+    ggplot(aes(x = q_mm, y = yield)) +
+      facet_grid(var~season, scales = "free", labeller = label_parsed) +
+      geom_smooth(method=lm, se=FALSE, color = "black") +
+      geom_point(aes(color = factor(clust_5cl), shape = factor(year(event_start))), size = 2, stroke = 0.75, alpha = 0.8) +
+      scale_shape_manual(name = "Season",
+                         values = c(19, 17, 15)) +
+      scale_color_manual(name = "Cluster",
+                        values = c("#999999", "#E69F00", "#56B4E9", "#009E73", "#0072B2", "#D55E00", "#CC79A7")) +
+      ylab(expression(Event~NO[3]^-{}~or~SRP~or~turb.~yield)) +
+      xlab("Event water yield (mm)") +
+      theme1 +
+      theme(strip.background = element_blank(),
+            axis.title.y = element_blank()) +
+      ggtitle("Wade")
+  
+  # Faceted by solute and season  
+  pl_5 <-
+    allData %>% 
+    filter(site == "Wade") %>% 
+    filter(season != "winter") %>% 
+    mutate(season = factor(season, levels = c("spring", "summer", "fall"), labels = c("Spring", "Summer", "Fall"))) %>% 
+    # Adding the expressions as labels requires that you add labeller = label_parsed in the facet_* call below
+    mutate(var = factor(var, levels = c("NO3_kg_km2", "SRP_kg_km2", "turb_kg_km2"), labels = c(expression(NO[3]^-{}~(kg~N~km^{-2})) , expression(SRP~(kg~P~km^{-2})), expression(Turb.~(Sigma~NTU~km^{-2}))))) %>% 
+    ggplot(aes(x = q_mm, y = yield)) +
+      facet_grid(var~season, scales = "free", labeller = label_parsed) +
+      geom_smooth(method=lm, se=FALSE, color = "black") +
+      geom_point(aes(color = factor(clust_5cl), shape = factor(year(event_start))), size = 2, stroke = 0.75, alpha = 0.8) +
+      scale_shape_manual(name = "Year",
+                   values = c(19, 17, 15)) +
+      scale_color_manual(name = "Cluster",
+                        values = c("#999999", "#E69F00", "#56B4E9", "#009E73", "#0072B2", "#D55E00", "#CC79A7")) +
+      ylab(expression(Event~NO[3]^-{}~or~SRP~or~turb.~yield)) +
+      xlab("Event water yield (mm)") +
+      theme1 +
+      theme(strip.background = element_blank(),
+            strip.text.x = element_blank(),
+            legend.position = "none") +
+      ggtitle("Wade") 
+  
+  # Plot standardized residuals
+  pl_6 <- 
+    allData %>% 
+    filter(season != "winter") %>% 
+    filter(site == "Wade") %>% 
+    mutate(season = factor(season, levels = c("spring", "summer", "fall"), labels = c("Spring", "Summer", "Fall"))) %>% 
+    mutate(var = factor(var, levels = c("NO3_kg_km2", "SRP_kg_km2", "turb_kg_km2"), labels = c(expression(NO[3]^-{}~(kg~N~km^{-2})) , expression(SRP~(kg~P~km^{-2})), expression(Turb.~(Sigma~NTU~km^{-2}))))) %>%   
+    ggplot(aes(x = q_mm, y = .std.resid)) +
+    facet_grid(var~season, scales = "free", labeller = label_parsed) +
+    geom_hline(yintercept = 0, color = "black", linetype = "dashed") +
+    geom_hline(yintercept = -2, color = "gray80", linetype = "dashed") +
+    geom_hline(yintercept = 2, color = "gray80", linetype = "dashed") +
+    geom_point(aes(color = factor(clust_5cl), shape = factor(year(event_start))), size = 2, stroke = 0.75, alpha = 0.8) +
+    scale_shape_manual(name = "Year",
+                 values = c(19, 17, 15)) +    
+    scale_color_manual(name = "Cluster",
+                      values = c("#999999", "#E69F00", "#56B4E9", "#009E73", "#0072B2", "#D55E00", "#CC79A7")) +    
+    ylab("Std. residuals") +
+    xlab("Event water yield (mm)") +
+    theme1 +
+    theme(strip.background = element_blank(),
+          strip.text.x = element_blank())  
+
+# Combine plots
+  # Seasonal plots
+  (pl_2 | pl_3) / (pl_5 | pl_6)
+```
+May need to look at segmented regression, especially for turbidity
+<br><br>
+
+##### Event NO3 to SRP yield ratios
+
