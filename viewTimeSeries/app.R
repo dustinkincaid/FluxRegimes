@@ -128,7 +128,7 @@ server <- function(input, output) {
                                      tooltip = eventID,
                                      color = factor(clust_5cl),
                                      shape = factor(year(event_start))),
-                                 size = 2, stroke = 0.75, alpha = 0.8) +
+                                 size = 3, stroke = 0.75, alpha = 0.8) +
           scale_shape_manual(name = "Year",
                              values = c(19, 17, 15)) +
           scale_color_manual(name = "Cluster",
@@ -141,7 +141,7 @@ server <- function(input, output) {
                 legend.position = "none") +
           ggtitle("Hungerford")
     x <- girafe(code = print(gg_linReg),
-                width_svg = 6, 
+                width_svg = 8, 
                 height_svg = 6,
                 options = list(
                   opts_hover(css = "fill:#FF3333;stroke:black;cursor:pointer;", reactive = TRUE),
@@ -150,6 +150,10 @@ server <- function(input, output) {
                 ))
     x
   })
+  
+   observeEvent(input$reset, {
+    session$sendCustomMessage(type = 'plot_set', message = character(0))
+  }) 
   
   # Tab 2: static time series plot
   output$ts_plot_2 <- renderPlot({
