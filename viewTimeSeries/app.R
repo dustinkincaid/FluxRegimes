@@ -59,8 +59,8 @@ tab2 <- tabPanel(title = 'Linear regs. vs. TS',
       choices = unique(lr[['site']]))
   ),
   fluidRow(
-      column(width = 4, ggiraph::ggiraphOutput('int_reg_plot')),
-      column(width = 8, ggiraph::ggiraphOutput('ts_plot_2'))
+      column(width = 7, ggiraph::ggiraphOutput('int_reg_plot')),
+      column(width = 5, ggiraph::ggiraphOutput('ts_plot_2'))
   )
 )
 
@@ -132,7 +132,7 @@ server <- function(input, output) {
           ggtitle("Hungerford")
     x <- girafe(code = print(gg_linReg),
                 width_svg = 6, 
-                height_svg = 5,
+                height_svg = 6,
                 options = list(
                   opts_hover(css = "fill:#FF3333;stroke:black;cursor:pointer;", reactive = TRUE),
                   opts_selection(
