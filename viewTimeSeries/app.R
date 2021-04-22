@@ -52,16 +52,26 @@ tab1 <- tabPanel(title = 'View event TS',
   in1, out1, out2)
 
 # This is the second tab
+# tab2 <- tabPanel(title = 'Linear regs. vs. TS',
+#   fluidRow(selectInput(
+#       inputId = 'selected_site',
+#       label = 'Select a site',
+#       choices = unique(lr[['site']]))
+#   ),
+#   fluidRow(
+#       column(width = 7, ggiraph::ggiraphOutput('int_reg_plot')),
+#       column(width = 5, ggiraph::ggiraphOutput('ts_plot_2'))
+#   )
+# )
+
 tab2 <- tabPanel(title = 'Linear regs. vs. TS',
   fluidRow(selectInput(
       inputId = 'selected_site',
       label = 'Select a site',
       choices = unique(lr[['site']]))
   ),
-  fluidRow(
-      column(width = 7, ggiraph::ggiraphOutput('int_reg_plot')),
-      column(width = 5, ggiraph::ggiraphOutput('ts_plot_2'))
-  )
+  fluidRow(ggiraph::ggiraphOutput('int_reg_plot')),
+  fluidRow(ggiraph::ggiraphOutput('ts_plot_2'))
 )
 
 ui <- navbarPage(title = 'Event Time Series Explorer',
