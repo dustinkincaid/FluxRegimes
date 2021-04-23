@@ -2,7 +2,7 @@
 library('shiny')
 library('tidyverse')
 library('ggiraph')
-
+library(lubridate)
 # Read data
     # Stream time series data (created using create_timeSeries_for_viewTimeSeries.R)
     ts <- read_csv('Data/streamData_for_viewTimeSeriesApp.csv', col_types = cols(event_start = col_character(),
