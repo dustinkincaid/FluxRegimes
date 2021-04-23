@@ -71,7 +71,7 @@ tab2 <- tabPanel(title = 'Linear regs. vs. TS',
       choices = unique(lr[['site']]))
   ),
   fluidRow(ggiraph::ggiraphOutput('int_reg_plot')),
-  fluidRow(ggiraph::ggiraphOutput('ts_plot_2'))
+  fluidRow(plotOutput('ts_plot_2'))
 )
 
 ui <- navbarPage(title = 'Event Time Series Explorer',
@@ -155,7 +155,10 @@ server <- function(input, output) {
   # Tab 2: static time series plot
   output$ts_plot_2 <- renderPlot({
     df <- ts %>% 
-        dplyr::filter(site == input[['selected_eventID']])
+      dplyr::filter(eventID %in% input$int_reg_plot_selected) %>%
+      tidyr::pivot_longer(cols = c(NO3, SRP, turb, q_cms), names_to = "var", values_to = "value") %>% 
+      dplyr::mutate(var = factor(var, levels = c("q_cms", "NO3", "SRP", "turb"), labels = c("Q (cms)", "NO3 (mg N/L)", "SRP (mg P/L)", "Turbidity (NTU)")))
+    
     ggplot(df, aes(x = timestamp, y = value)) +
         facet_wrap(~var, scales = "free_y", ncol = 1) +
         geom_vline(aes(xintercept = ymd_hms(event_start, tz = "Etc/GMT+4")), linetype = "dashed") +
