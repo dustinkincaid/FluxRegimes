@@ -592,6 +592,7 @@
 # Remove unnecessary objects
   rm(interp_time, interp_time_q)
 
+  
 # ----    
 
   
@@ -1135,6 +1136,21 @@
            falling_inf_pt = as.character(falling_inf_pt),
            event_end = as.character(event_end)) %>%
     write_csv("Data/streamData_HF_WD_2017-2019.csv")
+  
+  all <-
+      left_join(stream, met_all, by = c("site", "timestamp")) %>%
+      left_join(soils_all %>%
+                  filter((transect == "HW" & pit == 3 & depth == 15) |
+                           (transect == "WW" & pit == 6 & depth == 15)),
+                by = c("site", "timestamp"))
+
+  all %>%
+    mutate(timestamp = as.character(timestamp),
+           rain_start = as.character(rain_start),
+           event_start = as.character(event_start),
+           falling_inf_pt = as.character(falling_inf_pt),
+           event_end = as.character(event_end)) %>%
+    write_csv("Data/mostVars_HF_WD_2017-2019.csv")
   
   # Calculate yield
   # While there are still missing Q and solute/ysi values, this is a continuous 15-min time series meaning that the time difference

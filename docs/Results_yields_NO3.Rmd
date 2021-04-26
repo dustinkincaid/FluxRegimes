@@ -258,10 +258,10 @@ Distribution of clusters across seasons. Recall that cluster 1 in the first mode
       geom_bar(stat = "identity") +
       scale_fill_manual(name = "Cluster",
                         values = c("#999999", "#E69F00", "#56B4E9", "#009E73", "#0072B2", "#D55E00", "#CC79A7"),
-                        labels = c("Warm; dry; high redox; infreq., \nlarge, int. rain; low Q", 
-                                   "Cool; wetter; freq., large, \nlow int. rain; high Q",
-                                   "Cold; wetter; freq., small, \nlow int. rain; med. Q", 
-                                   "Warm; wetter; low redox; small, \nlow int. rain; low Q")) +
+                        labels = c("Hot; dry; high red.; low pre-NO3; \ninfreq., large, int. rain; low Q", 
+                                   "Cool; wet; low-med. red.; freq., \nlarge, low int. rain; high Q",
+                                   "Cold; wet; med. red.; freq., \nsmall, low int. rain; med. Q", 
+                                   "Warm; wet; low red.; small, \nlow int. rain; low Q")) +
       # scale_fill_manual(name = "Cluster",
       #                   values = c("#999999", "#E69F00", "#56B4E9", "#009E73", "#0072B2", "#D55E00", "#CC79A7")) +    
       ylab(expression(atop(Event~NO[3]^-{}~yield, (kg~N~km^{-2})))) +
@@ -292,14 +292,15 @@ Distribution of clusters across seasons. Recall that cluster 1 in the first mode
     ggplot(aes(x = month_day_rep, y = NO3_kg_km2, fill = as.factor(clust_wat_5cl))) +
       facet_wrap(~year, scales = "free_x", ncol = 2) +
       geom_bar(stat = "identity") +
-      # scale_fill_manual(name = "Cluster",
-      #                   values = c("#999999", "#E69F00", "#56B4E9", "#009E73", "#0072B2", "#D55E00", "#CC79A7"),
-      #                   labels = c("Warm, dry soil, big rain", 
-      #                              "Very wet soil, rain/melt",
-      #                              "Cold, dry soil, mostly melt",
-      #                              "Low sun, wet soil, low-int. rain")) +
       scale_fill_manual(name = "Cluster",
-                        values = c("#999999", "#E69F00", "#56B4E9", "#009E73", "#0072B2", "#D55E00", "#CC79A7")) +
+                        values = c("#999999", "#0072B2", "#E69F00", "#009E73", "#56B4E9", "#D55E00", "#CC79A7"),
+                        labels = c("Hot; dry; high red.; low pre-NO3; \ninfreq., large, int. rain; low Q",
+                                   "Cool; dry; high red.; high pre-NO3; \nlow pre-Q; long, low-int. rain; med Q",
+                                   "Cool; wet; low-med. red; freq., \nlarge, low int. rain; high Q",
+                                   "Warm; wet; low red.; freq, small, \nlow int. rain; low Q",
+                                   "Cold; wet; med. red.; freq. small, \nlow int. rain; med. Q")) +
+      # scale_fill_manual(name = "Cluster",
+      #                   values = c("#999999", "#E69F00", "#56B4E9", "#009E73", "#0072B2", "#D55E00", "#CC79A7")) +
       ylab(expression(atop(Event~NO[3]^-{}~yield, (kg~N~km^{-2})))) +
       xlab("Date (month/day - #)") +
       theme_bw() +
@@ -330,14 +331,16 @@ Distribution of clusters across seasons. Recall that cluster 1 in the first mode
       facet_wrap(~year, scales = "free_x", ncol = 2) +
       # facet_grid(var ~ year, scales = "free") +
       geom_bar(stat = "identity") +
-      # scale_fill_manual(name = "Cluster",
-      #                   values = c("#999999", "#E69F00", "#56B4E9", "#009E73", "#0072B2", "#D55E00", "#CC79A7"),
-      #                   labels = c("Warm, dry soil, big rain", 
-      #                              "Very wet soil, rain/melt",
-      #                              "Cold, dry soil, mostly melt",
-      #                              "Low sun, wet soil, low-int. rain")) +
       scale_fill_manual(name = "Cluster",
-                        values = c("#999999", "#E69F00", "#56B4E9", "#009E73", "#0072B2", "#D55E00", "#CC79A7")) +
+                        values = c("#56B4E9", "#000000", "#009E73", "#CC79A7", "#E69F00", "#0072B2"),
+                        labels = c("Cold; wet; med red.; freq. small, \nlow int. rain; med. Q",
+                                   "Warm; wet; low red.; high pre-NO3; high pre-Q; \nfreq. small, low int. rain; med. Q",
+                                   "Warm; var. wet; low-med red.; freq. \nsmall, low int. rain; low Q",
+                                   "Hot; wet; high red.; low pre-NO3; \ninfreq., large, int. rain; low Q",
+                                   "Warm; wet; low-med. red.; freq. \nlarge, low int. rain; high Q",
+                                   "Cool-warm; dry; high red.; low pre-NO3; \ninfreq., long, low int. rain; low-med. Q")) +
+      # scale_fill_manual(name = "Cluster",
+      #                   values = c("#999999", "#E69F00", "#56B4E9", "#009E73", "#0072B2", "#D55E00", "#CC79A7")) +
       ylab(expression(atop(Event~NO[3]^-{}~yield, (kg~N~km^{-2})))) +
       xlab("Date (month/day - #)") +
       theme_bw() +

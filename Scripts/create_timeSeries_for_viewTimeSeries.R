@@ -9,10 +9,27 @@ library("data.table")
 # Read in data
   # 2017-2019 stream time series with event start and end dates (created in compile_calculate_allVars.R)
   # The data are from/prepared in compile_calculate_allVars.R
-  stream <- read_csv("Data/streamData_HF_WD_2017-2019.csv", col_types = cols(rain_start = col_datetime(format = ""),
-                                                                             event_start = col_datetime(format = ""),
-                                                                             falling_inf_pt = col_datetime(format = ""),
-                                                                             event_end = col_datetime(format = ""))) %>% 
+  stream <- read_csv("Data/mostVars_HF_WD_2017-2019.csv", col_types = cols(timestamp = col_datetime(format = ""),
+                                                                           rain_start = col_datetime(format = ""),
+                                                                           event_start = col_datetime(format = ""),
+                                                                           falling_inf_pt = col_datetime(format = ""),
+                                                                           event_end = col_datetime(format = ""),
+                                                                           transect = col_character(),
+                                                                           pit = col_double(),
+                                                                           depth = col_double(),
+                                                                           DO = col_double(),
+                                                                           Redox = col_double(),
+                                                                           SoilTemp = col_double(),
+                                                                           VWC = col_double(),
+                                                                           temp_C = col_double(),
+                                                                           PAR_uE = col_double(),
+                                                                           gustSpeed = col_double(),
+                                                                           solarRad_wm2 = col_double(),
+                                                                           windDir = col_double(),
+                                                                           Rh = col_double(),
+                                                                           dewPoint = col_double(),
+                                                                           windSpeed = col_double(),
+                                                                           atm_mbar = col_double())) %>% 
     # Convert date
     mutate(timestamp = ymd_hms(timestamp, tz = "Etc/GMT+4"),
            rain_start = ymd_hms(rain_start, tz = "Etc/GMT+4"),
@@ -36,8 +53,8 @@ dates <-
             by = c("site", "event_start")) %>% 
   select(site, rain_start, event_start, falling_inf_pt, event_end) %>% 
   # Extend range around event start and end (so I can graph the event time series plus data on either side of the event)
-  mutate(event_start_7dB4 = event_start - days(7),
-         event_end_7dAF = event_end + days(7)) %>% 
+  mutate(event_start_10dB4 = event_start - days(10),
+         event_end_10dAF = event_end + days(10)) %>% 
   # Add an event ID to use in Shiny app
   mutate(siteabbrev = ifelse(site == "Hungerford", "HB", "WB"),
          eventID = paste(siteabbrev, "-", as.character(event_start), sep = "")) %>% 
@@ -56,7 +73,7 @@ setDT(stream)[, Time2 := timestamp]
 setDT(dates)
 
 # Need to set keys for y (dates) before the overlap join
-setkey(dates, site, event_start_7dB4, event_end_7dAF)
+setkey(dates, site, event_start_10dB4, event_end_10dAF)
 
 # Here we do the overlap join by timestamp_sample_24BS and timestamp_sample
 # the [ ] at the end just removes the extra columns added
@@ -71,6 +88,6 @@ alldata %>%
          event_start = as.character(event_start),
          falling_inf_pt = as.character(falling_inf_pt),
          event_end = as.character(event_end),
-         event_start_7dB4 = as.character(event_start_7dB4),
-         event_end_7dAF = as.character(event_end_7dAF)) %>%
+         event_start_10dB4 = as.character(event_start_10dB4),
+         event_end_10dAF = as.character(event_end_10dAF)) %>%
   write_csv("viewTimeSeries/Data/streamData_for_viewTimeSeriesApp.csv")
