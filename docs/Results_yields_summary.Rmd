@@ -81,7 +81,7 @@ knitr::opts_chunk$set(fig.width = 6, fig.asp = 0.618, out.width = "70%", fig.ali
                   legend.title = element_text(size = 6)) 
 ```
 
-```{r timeline, include = TRUE, echo = FALSE, message = FALSE, warning = FALSE, fig.width = 10, fig.asp = .7, out.width = "100%"}
+```{r timeline, include = TRUE, echo = FALSE, message = FALSE, warning = FALSE, fig.width = 11, fig.asp = .7, out.width = "100%"}
 # Plot timeline of event water yields & ratios colored by cluster number
 # NOTE: THESE PLOTS ASSUME THAT A 5 CLUSTER SOM MODEL IS APPROPRIATE FOR ALL SITE x VAR COMBO; ALTER IF NOT APPROPRIATE
 # HFORD
@@ -147,7 +147,8 @@ knitr::opts_chunk$set(fig.width = 6, fig.asp = 0.618, out.width = "70%", fig.ali
       xlab("Date (month/day - #)") +
       theme1 +
       theme(axis.text.x = element_text(angle = 90),
-            strip.background = element_blank())
+            strip.background = element_blank(),
+            strip.text.y = element_text(size = 9))
   
 # WADE
   # Create a dataframe that drops event dates that only have Q yield
@@ -206,7 +207,8 @@ knitr::opts_chunk$set(fig.width = 6, fig.asp = 0.618, out.width = "70%", fig.ali
       xlab("Date (month/day - #)") +
       theme1 +
       theme(axis.text.x = element_text(angle = 90),
-            strip.background = element_blank())
+            strip.background = element_blank(),
+            strip.text.y = element_text(size = 9))
   
 # Combine the plots into one using the patchwork library
   # HFORD
