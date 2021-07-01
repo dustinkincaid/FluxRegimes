@@ -1,0 +1,191 @@
+---
+title: "Basic statistics in R"
+output: html_document
+---
+
+We'll learn how to code some basic statistics in this R script, including:
+-Descriptive statistics (mean, standard deviation, maximum, minimum, median, range, quantiles)
+-correlations
+-linear regression
+-ANOVA 
+
+
+-Descriptive statistics are helpful to calculate for the initial exploration of a dataset/when you are unsure of  what the trends in the data may be/what story the data may tell you.
+
+We will work with the `iris` dataset (it's built into R) to experiment with some descriptive stats.
+
+-Base R's `summary` function will return quartiles for each variable (i.e., column) and will return counts of factor variables 
+
+-If there are any NAs in your dataset, the `summary` function will detect them
+-the `hist` function will return a histogram (shows the number of observations for each value) of the variable that you specify, which can be helpful to identify the distribution 
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(tidyverse)
+summary(iris) #you can go ahead and explore the summary function using the iris dataset
+
+hist(iris$Sepal.Length) #check out the distribution of different variables in the iris 
+
+#various descriptive statistics functions
+min(iris$Sepal.Width)
+max(iris$Petal.Length)
+mean(iris$Sepal.Width)
+median(iris$Petal.Length)
+range(iris$Petal.Length)
+sd(iris$Petal.Length) #standard deviation 
+cv <- sd(iris$Sepal.Length) / mean(iris$Sepal.Length) * 100 #coefficient of variation
+
+quantile(iris$Sepal.Length) #all quartiles 
+
+quantile(iris$Sepal.Length, 0.25)  #first quartile (lowest 25% of data)
+quantile(iris$Sepal.Length, 0.50)  #second quartile (median)
+quantile(iris$Sepal.Length, 0.75)  #third quartile (75% of data is below this value and 25% is above this value)
+
+#dot charts to detect outliers 
+dotchart(iris$Sepal.Length, main="Sepal Length")
+dotchart(iris$Sepal.Width, main="Sepal Length")
+
+```
+
+The `group_by` and `summarise` functions from the dplyr package can be used together to compute some summary statistics. 
+```{r}
+library(dplyr)
+
+iris %>%
+  group_by(Species) %>% #group by the three different species 
+  summarise(Length.mean = mean(Sepal.Length)) #compute the mean of sepal length and group by species 
+```
+
+This is helpful, but the code can get really long if you want to calculate stats for many different variables
+```{r}
+iris %>% 
+  group_by(Species) %>% #group by species
+  summarise(across(where(is.numeric), mean, na.rm =T)) #calculate mean for numeric columns 
+
+#calculate multiple statistics 
+iris %>% group_by(Species) %>% #group by species 
+  summarise(
+  across(where(is.numeric), ~mean(.x, na.rm = TRUE), .names = "mean_{.col}"), #calculates mean for each numeric variable and names the                                                                                #columns accordingly 
+  across(where(is.numeric), ~median(.x, na.rm = TRUE), .names = "median_{.col}")) #calculates median for each numeric variable and names                                                                                   #the columns accordingly 
+
+#create a data frame and view it 
+iris.stats.summary <- iris %>% group_by(Species) %>% 
+  summarise(
+  across(where(is.numeric), ~mean(.x, na.rm = TRUE), .names = "mean_{.col}"), 
+  across(where(is.numeric), ~median(.x, na.rm = TRUE), .names = "median_{.col}")) 
+
+#change the format of the data frame to view it in long format (makes it a bit easier to work with)
+library(reshape2)
+melt(iris.stats.summary)
+iris.stats.summary.m <- melt(iris.stats.summary)
+
+```
+
+Linear regression
+-tests whether two variables have a linear relationship (i.e., does the independent variable cause significant changes to the dependent variable)
+-R squared value represents the proportion of variance in Y explained by X and indicates accuracy of predicting Y based off of X 
+-P value indicates whether the relationship is statistically significant 
+```{r}
+
+#let's explore some linear relationships between variables using ggplot 
+
+ggplot(data = iris, aes(x = Petal.Width, y = Sepal.Length)) + geom_point()
+
+#check to see if there is a linear relationship between the two variables 
+petalL.sepalL.lm <- lm(Sepal.Length ~ Petal.Width, data= iris)
+
+summary(petalL.sepalL.lm) #use the summary function to compute the r squared and the p-value, etc.
+
+#it is important to note that you must check if your dataset violates any assumptions of linear regression before you consider the results "valid". If assumptions are violated, there are options (i.e., transformations or other tests)
+
+```
+
+T-test
+Paired t-test = compares means of the same group or item under two separate scenarios 
+  -you have two values (i.e., pair of values) for the same samples 
+  -Example: you weigh the same mice twice (before and after treatment)
+Unpaired t-test = compares the means of two independent or unreleated groups
+  -you have two different treatment groups 
+  -you test effectiveness of a new medication on a group of men and women 
+  
+In the `iris` dataset we have three different groups, which are the three different plant species. So, we can use the unpaired t-test to determine whether two different variables have different group means. 
+
+Caution: variance must be equal between the two groups.
+Paired T-test:
+http://www.sthda.com/english/wiki/paired-samples-t-test-in-r
+```{r}
+#run this code to create a data frame of mice data
+# Weight of the mice before treatment
+before <-c(200.1, 190.9, 192.7, 213, 241.4, 196.9, 172.2, 185.5, 205.2, 193.7)
+# Weight of the mice after treatment
+after <-c(392.9, 393.2, 345.1, 393, 434, 427.9, 422, 383.9, 392.3, 352.2)
+# Create a data frame
+my_data <- data.frame( 
+                group = rep(c("before", "after"), each = 10),
+                weight = c(before,  after)
+                )
+
+
+res <- t.test(weight ~ group, data = my_data, paired = TRUE)
+
+```
+
+Unpaired T-test:
+
+http://www.sthda.com/english/wiki/unpaired-two-samples-t-test-in-r
+```{r}
+#create data frame
+# Data in two numeric vectors
+women_weight <- c(38.9, 61.2, 73.3, 21.8, 63.4, 64.6, 48.4, 48.8, 48.5)
+men_weight <- c(67.8, 60, 63.4, 76, 89.4, 73.3, 67.3, 61.3, 62.4) 
+# Create a data frame
+my_data.2 <- data.frame( 
+                group = rep(c("Woman", "Man"), each = 9),
+                weight = c(women_weight,  men_weight)
+                )
+
+#run the unpaired t-test
+res <- t.test(weight ~ group, data = my_data, var.equal = TRUE)
+
+```
+
+One-way analysis of variance (ANOVA)
+-comparing means when there are more than two groups
+http://www.sthda.com/english/wiki/one-way-anova-test-in-r
+```{r}
+#we can use the iris dataset to run an ANOVA, since there are more than two groups
+
+levels(iris$Species) #how many groups are there in the iris dataset?
+
+#plot one of the variables by species 
+ggplot(data = iris, aes(x = Species, y = Sepal.Length)) + geom_boxplot() 
+
+
+#run the ANOVA
+anova.1 <- aov(Sepal.Length~Species, data = iris)
+summary(anova.1) #get the summary output
+#this tells us that there is a significant difference between the three groups, but we don't yet know between which groups
+
+#Multiple pairwise comparisons 
+TukeyHSD(anova.1) #Tukey Honest Significant Difference test will tell us which species have different means
+
+```
+
+Practice 
+
+"ToothGrowth data set contains the result from an experiment studying the effect of vitamin C on tooth growth in 60 Guinea pigs. Each animal received one of three dose levels of vitamin C (0.5, 1, and 2 mg/day) by one of two delivery methods, (orange juice or ascorbic acid (a form of vitamin C and coded as VC)."
+
+Practice: 
+-try to make a table summarizing the median tooth length according to dose and supplement
+-does the dosage of vitamin C significantly impact tooth growth?
+-does the delivery method have an effect on tooth growth?
+Use the dataset `ToothGrowth`
+```{r}
+#len = measurement of tooth growth
+ToothGrowth
+
+#need to make the dose variable a factor in order to use ANOVA
+ToothGrowth$dose <- as.factor(ToothGrowth$dose)
+
+```
+
