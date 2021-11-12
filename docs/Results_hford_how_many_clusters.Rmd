@@ -1,0 +1,1308 @@
+---
+title: <font size = "5"> Deciding on number of event clusters to use at Hungerford by mapping clusters onto yields and CQ patterns </font>
+author: "Dustin Kincaid"
+date: "11/11/2021<br><br>"
+output: html_document
+editor_options: 
+  chunk_output_type: console
+  markdown: 
+    wrap: sentence
+---
+
+```{css, echo=FALSE}
+h1, h2, h3, h4, h5, h6 {
+  text-align: center;
+}
+```
+
+### Objective
+##### Create key figures for paper summarizing all results of SOM clustered flux regimes on event NO3, SRP, and turbidity yields from Hungerford and Wade Brooks.
+<br><br>
+
+```{r setup, include=FALSE, warning=FALSE, message = FALSE}
+# Set defaults
+knitr::opts_chunk$set(fig.width = 6, fig.asp = 0.618, out.width = "70%", fig.align = "center")
+
+# Load packages
+  library("here")      # to make file paths fail less
+  library("tidyverse") # general workhorse
+  library("lubridate") # to work with dates
+  library("patchwork") # arranging multiple plots
+  library("broom")     # for linear regressions
+  library("dataRetrieval") # for downloading USGS Q
+  library("zoo")      # to fill in missing data in USGS Q
+```
+
+```{r data, include=FALSE, warning=FALSE, message = FALSE}
+# Read in data
+  # Calculated event metrics for each site as calculated in compile_calculate_allVars.R
+  hford <- read_csv(here("Data", "eventMetrics_hford.csv")) %>% 
+    mutate(event_start = ymd_hms(event_start, tz = "Etc/GMT+4"))
+  # wade <- read_csv(here("Data", "eventMetrics_wade.csv")) %>% 
+  #   mutate(event_start = ymd_hms(event_start, tz = "Etc/GMT+4"))
+
+  # SOM results from SOManalysis_SITE_yields.Rmd
+  som_results <- read_csv(here("Data", "somResults", "hford", "yields", "all", "2021-11-11", "Results_hford_withClusters.csv")) %>% 
+    rename( clust_3cl = clust_wat_3cl, clust_4cl = clust_wat_4cl, clust_5cl = clust_wat_5cl) %>% 
+    mutate(event_start = ymd_hms(event_start, tz = "Etc/GMT+4"))
+    
+  # som_wd <- read_csv(here("Data", "somResults", "wade", "yields", "all", "2021-04-30", "Results_wade_withClusters.csv")) %>% 
+  #   rename(clust_4cl = clust_wat_4cl, clust_5cl = clust_wat_5cl, clust_6cl = clust_wat_6cl)
+```
+
+```{r download Q, include = TRUE, echo = FALSE, message = FALSE, warning = FALSE}
+# Discharge data from USGS ----
+  # Provide information for data retrieval
+    # 04293500 = East Berkshire
+    # 04282795 = Laplatte River @ Shelburne Falls
+  siteNos <- c("04292750")
+  pCodes <- c("00065", "00060")
+  start.date <- "2018-01-01"
+  end.date <- "2020-12-31"
+
+  # Retrieve data as specified above
+  str <- readNWISuv(siteNumbers = siteNos,
+                    parameterCd = pCodes,
+                    startDate = start.date,
+                    endDate = end.date)
+  
+  # Tidy data
+  str <- 
+    # Function below is built in and should fix most/all of the column names
+    renameNWISColumns(str) %>% 
+    # Rename timestamp column 
+    rename(timestamp = dateTime) %>% 
+    # Provide column for stream names
+    mutate(site_name = "mill") %>% 
+    # Convert time from UTC to EST
+    # The data are downloaded in UTC, so tell R this
+    mutate(timestamp = ymd_hms(timestamp, tz = "UTC")) %>% 
+    # Now convert the times from UTC to EST
+    mutate(timestamp = with_tz(timestamp, tzone = "Etc/GMT+5")) %>% 
+    # Select & arrange columns to keep
+    select(agency_cd, site_no, site_name, timestamp, Flow_Inst, GH_Inst)
+
+# We can use this function to plot each year in one plot
+same_year <- function(x) {
+ year(x) <- 2000
+ x
+}
+ 
+# Plot
+q_cum_daily <-
+  str %>% 
+  mutate(year = year(timestamp)) %>% 
+  # First calculate daily cumulative discharge
+  group_by(year, date(timestamp)) %>% 
+  summarize(q_cum_daily = sum(Flow_Inst, na.rm = F)) %>%
+  # Find first NA value each year
+  group_by(year) %>% 
+  mutate(firstDay = `date(timestamp)`[which(first(na.omit(q_cum_daily)))])
+
+
+  mutate(q_cum_daily = cumsum(Flow_Inst)) %>% 
+  filter(year == 2018)
+  
+
+str %>% 
+  mutate(year = year(timestamp)) %>% 
+  group_by(year) %>% 
+  mutate(q_cum = cumsum(Flow_Inst)) %>% 
+  summarize(max_q = max(q_cum, na.rm = T))
+  
+
+str %>% 
+  mutate(year = year(timestamp)) %>% 
+  group_by(year) %>% 
+  mutate(q_cum = cumsum(Flow_Inst)) %>% 
+  ggplot(aes(x = same_year(timestamp), y = q_cum, group = factor(year), color = factor(year))) +
+  geom_line() +
+  theme_classic()
+  
+
+```
+
+```{r plot themes and labels, include = FALSE}
+# Plotting specifics
+  theme1 <- theme_classic() +
+            theme(axis.text = element_text(size = 11),
+                  axis.title = element_text(size = 12),
+                  axis.title.x = element_text(margin=margin(5,0,0,0)),
+                  axis.title.y = element_text(margin=margin(0,5,0,0)),
+                  legend.title = element_text(size = 9),
+                  legend.text = element_text(size = 9),
+                  strip.text = element_text(size = 12))
+  
+  # A new theme for the hysteresis plots
+  theme2 <- theme(axis.line = element_blank(),
+                  axis.text = element_text(size = 8),
+                  axis.title = element_blank(),
+                  plot.margin = unit(c(1.25,1.25,1.25,1.25), "lines"),
+                  panel.background = element_blank(),
+                  panel.grid.major = element_blank(), 
+                  panel.grid.minor = element_blank(),
+                  legend.text = element_text(size = 6),
+                  legend.key.size = unit(0.1, "in"),
+                  legend.margin = margin(0, 0, 0, 0),
+                  legend.title = element_text(size = 6)) 
+```
+
+```{r timeline, include = TRUE, echo = FALSE, message = FALSE, warning = FALSE, fig.width = 11, fig.asp = .7, out.width = "100%"}
+# Plot timeline of event water yields & ratios colored by cluster number
+# HFORD
+  # Create a dataframe that drops event dates that only have Q yield
+  hf_yields <- 
+    som_results %>% 
+    filter(site == "Hungerford") %>% 
+    pivot_longer(cols = c(NO3_kg_km2, SRP_kg_km2, turb_kg_km2), names_to = "var", values_to = "yield") %>% 
+    mutate(year = year(event_start)) %>% 
+    select(site, event_start, year, clust_3cl, clust_4cl, clust_5cl, gw_1d_well1, gw_1d_well3, gw_1d_well5, var, yield) %>% 
+    mutate(var = factor(var, 
+                    levels = c("NO3_kg_km2", "SRP_kg_km2", "turb_kg_km2"), 
+                    labels = c(expression(NO[3]^-{}~(kg~N~km^{-2})) , expression(SRP~(kg~P~km^{-2})), expression(Turb.~(Sigma~NTU~km^{-2}))))) %>%   
+    # Only 2 events in 2017, so cutting out 2017
+    filter(year(event_start) != 2017) %>%
+     # Add leading zero to single digit months and days
+    mutate(year = year(event_start),
+           month = str_pad(month(event_start), 2, pad = 0),
+           day = str_pad(day(event_start), 2, pad = 0),
+           month_day = paste(month, "/", day, sep = "")) %>%
+    # There is one day where there are two events, add a rep for month_day and make month_day_rep ID
+    group_by(var, year, month_day) %>% 
+    mutate(rep = row_number()) %>% 
+    mutate(month_day_rep = paste(month_day, rep, sep = "-")) %>% 
+    filter(!(event_start >= ymd_hms("2019-01-01 00:00:00", tz = "Etc/GMT+4") & event_start <= ymd_hms("2019-03-29 00:00:00", tz = "Etc/GMT+4")))
+
+
+  # First graph GW level data along with water yield timeline
+  # Text for missing data on 2019 plot
+  ann_text <- data.frame(month_day_rep = "03/26-2", gw_1d_well5 = -0.35, lab = "No \n data",
+                         year = factor(2019, levels = c("2018", "2019")))
+  # GW Plot
+  pl_hf_gw <- 
+    hf_yields %>% 
+    group_by(event_start) %>% 
+    slice(1:1) %>% 
+    ggplot(aes(x = month_day_rep, y = gw_1d_well5)) +
+      facet_wrap(~year, scales = "free_x", ncol = 3) +
+      geom_bar(stat = "identity", fill = "white") +
+      ylab("GW level \n (m below \n soil surface)") +
+      xlab("Date (month/day - #)") +
+      scale_y_continuous(expand = c(0, 0)) +
+      theme_bw() +
+      theme(panel.grid = element_blank(),
+            panel.background = element_rect(fill = "lightblue"),
+            strip.text.x = element_text(size = 8),
+            axis.text.x = element_blank(),
+            axis.title.x = element_blank()) +
+    geom_text(data = ann_text, label = "No \n data")
+
+  # 3 cluster model
+  pl_hf_3cl_1 <- 
+    hf_yields %>% 
+    ggplot(aes(x = factor(month_day_rep), y = yield, fill = as.factor(clust_3cl))) +
+      facet_grid(var~year, scale = "free", labeller = label_parsed) +
+      geom_bar(stat = "identity") +
+      scale_fill_manual(name = "Cluster",
+                  values = c("#999999", "#E69F00", "#56B4E9", "#009E73", "#0072B2", "#D55E00", "#CC79A7")) +
+      ylab("Event yield") +
+      xlab("Date (month/day - #)") +
+      theme1 +
+      theme(axis.text.x = element_text(angle = 90),
+            strip.background = element_blank(),
+            strip.text.y = element_text(size = 9))  
+  
+  # 4 cluster model
+  pl_hf_4cl_1 <- 
+    hf_yields %>% 
+    ggplot(aes(x = factor(month_day_rep), y = yield, fill = as.factor(clust_4cl))) +
+      facet_grid(var~year, scale = "free", labeller = label_parsed) +
+      geom_bar(stat = "identity") +
+      scale_fill_manual(name = "Cluster",
+                  values = c("#999999", "#E69F00", "#56B4E9", "#009E73", "#0072B2", "#D55E00", "#CC79A7")) +
+      ylab("Event yield") +
+      xlab("Date (month/day - #)") +
+      theme1 +
+      theme(axis.text.x = element_text(angle = 90),
+            strip.background = element_blank(),
+            strip.text.y = element_text(size = 9))
+  
+  # 5 cluster model
+  pl_hf_5cl_1 <- 
+    hf_yields %>% 
+    # Re-number, re-order, & re-color SOM clusters
+    # Use the spreadsheet in Data/planning_cluster_colors_and_order.xlsx to organize this. Very helpful!
+    # mutate(clust_5cl_new = ifelse(clust_5cl == 1, 2,
+    #                           ifelse(clust_5cl == 2, 1, 
+    #                                  ifelse(clust_5cl == 3, 4,
+    #                                         ifelse(clust_5cl == 4, 3,
+    #                                                ifelse(clust_5cl == 5, 5, NA)))))) %>% 
+    # mutate(clust_5cl_new = factor(clust_5cl_new,
+    #                               levels = c("1", "2", "3", "4", "5"),
+    #                               labels = c("Wet; low DO/red.; pre: drier, recent \nevent; small low-int. events",
+    #                                          "Cool; wet; high DO/red.; pre: higher Q, \nno recent event; small low-int. events",
+    #                                          "Warm; wet; low DO/red.; pre: recent \nevent; large, low-int. high-Q events",
+    #                                          "Hot; dry; high DO/red.; pre: dry, \nno recent event; large low-Q events",
+    #                                          "Cold; high DO/red.; pre: no \nrecent event; long events"))) %>% 
+    ggplot(aes(x = factor(month_day_rep), y = yield, fill = as.factor(clust_5cl))) +
+    # ggplot(aes(x = factor(month_day_rep), y = yield, fill = as.factor(clust_5cl_new))) +
+      facet_grid(var~year, scale = "free", labeller = label_parsed) +
+      geom_bar(stat = "identity") +
+      scale_fill_manual(name = "Cluster",
+                        values = c("#999999", "#E69F00", "#56B4E9", "#009E73", "#0072B2", "#D55E00", "#CC79A7")) +
+      # scale_fill_manual(name = "Cluster",
+      #             values = c("#999999", "#E69F00", "#56B4E9", "#009E73", "#0072B2", "#D55E00", "#CC79A7"),
+      #             labels = c("Cool; wet; high DO/red.; pre: higher Q, \nno recent event; small low-int. events",
+      #                        "Wet; low DO/red.; pre: drier, recent \nevent; small low-int. events",
+      #                        "Hot; dry; high DO/red.; pre: dry, \nno recent event; large low-Q events",
+      #                        "Warm; wet; low DO/red.; pre: recent \nevent; large, low-int. high-Q events",
+      #                        "Cold; high DO/red.; pre: no \nrecent event; long events")) +
+      ylab("Event yield") +
+      xlab("Date (month/day - #)") +
+      theme1 +
+      theme(axis.text.x = element_text(angle = 90),
+            strip.background = element_blank(),
+            strip.text.y = element_text(size = 9))  
+  
+# Combine the plots into one using the patchwork library
+  # HFORD
+  # 3 cluster model
+  pl_hf_gw / pl_hf_3cl_1 +
+    plot_layout(
+      ncol = 1,
+      heights = c(0.75, 4)) +
+    plot_annotation(
+      title = "Hungerford - 3 cluster model"
+    )
+  # 4 cluster model
+  pl_hf_gw / pl_hf_4cl_1 +
+    plot_layout(
+      ncol = 1,
+      heights = c(0.75, 4)) +
+    plot_annotation(
+      title = "Hungerford - 4 cluster model"
+    )
+  # 5 cluster model
+  pl_hf_gw / pl_hf_5cl_1 +
+    plot_layout(
+      ncol = 1, 
+      heights = c(0.75, 4)) +
+    plot_annotation(
+      title = "Hungerford - 5 cluster model"
+    )  
+  rm(pl_hf_gw, pl_hf_3cl_1, pl_hf_4cl_1, pl_hf_5cl_1) 
+```
+
+Time series of water yields colored by cluster.
+2017 data not shown because only a few events in fall.
+The white bars in the upper groundwater level plot indicate the groundwater depth below the soil surface.
+Keep in mind that a different SOM was created for each site x variable (e.g., NO3, SRP) combo; thus, the clusters may not have the same properties for each site x variable combination.
+<br><br>
+
+```{r cluster boxplots, include = TRUE, echo = FALSE, message = FALSE, warning = FALSE, fig.asp = 0.9}
+# ```{r cluster, include = TRUE, echo = FALSE, message = FALSE, warning = FALSE, fig.width = 9, fig.asp = 0.7}
+# Plot boxplots of water yields attributed to each cluster
+# HFORD
+  # NO3
+    # 3 clusters
+    pl_hf_x1 <- 
+      som_results %>%
+      filter(site == "Hungerford") %>% 
+      mutate(year = year(event_start)) %>% 
+      filter(!year %in% c(2017)) %>% 
+      ggplot(aes(x = factor(clust_3cl), y = NO3_kg_km2, color = factor(clust_3cl))) +
+      # ggplot(aes(x = factor(clust_3cl_new), y = NO3_kg_km2, color = factor(clust_3cl_new))) +
+      facet_wrap(~year) +
+      geom_boxplot() +
+      scale_color_manual(name = "Cluster",
+                        values = c("#999999", "#E69F00", "#56B4E9", "#009E73", "#0072B2", "#D55E00", "#CC79A7")) +   
+      ylab(expression(atop(Event~NO[3]^-{}~yield, (kg~N~km^{-2})))) +
+      xlab("Cluster") +
+      theme1 +
+      theme(legend.position = "none",
+            strip.background = element_blank(),
+            axis.title.x = element_blank(),
+            axis.text.x = element_blank()) +
+    ggtitle("3 clusters")
+
+    # 4 clusters
+    pl_hf_x2 <- 
+      som_results %>%
+      filter(site == "Hungerford") %>% 
+      mutate(year = year(event_start)) %>% 
+      filter(!year %in% c(2017)) %>% 
+      ggplot(aes(x = factor(clust_4cl), y = NO3_kg_km2, color = factor(clust_4cl))) +
+      # ggplot(aes(x = factor(clust_4cl_new), y = NO3_kg_km2, color = factor(clust_4cl_new))) +
+      facet_wrap(~year) +
+      geom_boxplot() +
+      scale_color_manual(name = "Cluster",
+                        values = c("#999999", "#E69F00", "#56B4E9", "#009E73", "#0072B2", "#D55E00", "#CC79A7")) +       
+      ylab(expression(atop(Event~NO[3]^-{}~yield, (kg~N~km^{-2})))) +
+      xlab("Cluster") +
+      theme1 +
+      theme(legend.position = "none",
+            strip.background = element_blank(),
+            axis.title.x = element_blank(),
+            axis.text.x = element_blank(),
+            axis.title.y = element_blank(),
+            axis.text.y = element_blank()) +
+    ggtitle("4 clusters")
+    
+    # 5 clusters
+    pl_hf_x3 <- 
+      som_results %>%
+      filter(site == "Hungerford") %>% 
+      # Re-number, re-order, & re-color SOM clusters
+      # Use the spreadsheet in Data/planning_cluster_colors_and_order.xlsx to organize this. Very helpful!
+      # mutate(clust_5cl_new = ifelse(clust_5cl == 1, 2,
+      #                           ifelse(clust_5cl == 2, 1, 
+      #                                  ifelse(clust_5cl == 3, 4,
+      #                                         ifelse(clust_5cl == 4, 3,
+      #                                                ifelse(clust_5cl == 5, 5, NA)))))) %>% 
+      # mutate(clust_5cl_new = factor(clust_5cl_new,
+      #                               levels = c("1", "2", "3", "4", "5"))) %>% 
+      mutate(year = year(event_start)) %>% 
+      filter(!year %in% c(2017)) %>% 
+      ggplot(aes(x = factor(clust_5cl), y = NO3_kg_km2, color = factor(clust_5cl))) +
+      # ggplot(aes(x = factor(clust_5cl_new), y = NO3_kg_km2, color = factor(clust_5cl_new))) +
+      facet_wrap(~year) +
+      geom_boxplot() +
+      scale_color_manual(name = "Cluster",
+                        values = c("#999999", "#E69F00", "#56B4E9", "#009E73", "#0072B2", "#D55E00", "#CC79A7")) +       
+      # scale_color_manual(name = "Cluster",
+      #             values = c("#999999", "#E69F00", "#56B4E9", "#009E73", "#0072B2", "#D55E00", "#CC79A7"),
+      #             labels = c("Cool; wet; high DO/red.; pre: higher Q, \nno recent event; small low-int. events",
+      #                        "Wet; low DO/red.; pre: drier, recent \nevent; small low-int. events",
+      #                        "Hot; dry; high DO/red.; pre: dry, \nno recent event; large low-Q events",
+      #                        "Warm; wet; low DO/red.; pre: recent \nevent; large, low-int. high-Q events",
+      #                        "Cold; high DO/red.; pre: no \nrecent event; long events")) +
+      # scale_color_manual(name = "Cluster",
+      #             values = c("#999999", "#56B4E9", "#009E73", "#D55E00", "#0072B2", "#E69F00", "#CC79A7"),
+      #             labels = c("Wet; low DO/red.; pre: drier, recent \nevent; small low-int. events",
+      #                        "Cool; wet; high DO/red.; pre: higher Q, \nno recent event; small low-int. events",
+      #                        "Warm; wet; low DO/red.; pre: recent \nevent; large, low-int. high-Q events",
+      #                        "Hot; dry; high DO/red.; pre: dry, \nno recent event; large low-Q events",
+      #                        "Cold; high DO/red.; pre: no \nrecent event; long events")) +   
+      ylab(expression(atop(Event~NO[3]^-{}~yield, (kg~N~km^{-2})))) +
+      xlab("Cluster") +
+      theme1 +
+      theme(legend.position = "none",
+            strip.background = element_blank(),
+            axis.title.x = element_blank(),
+            axis.text.x = element_blank(),
+            axis.title.y = element_blank(),
+            axis.text.y = element_blank()) +
+    ggtitle("5 clusters")
+    
+  # SRP
+    # 3 clusters
+    pl_hf_x4 <- 
+      som_results %>%
+      filter(site == "Hungerford") %>%
+      mutate(year = year(event_start)) %>% 
+      filter(!year %in% c(2017)) %>% 
+      ggplot(aes(x = factor(clust_3cl), y = SRP_kg_km2, color = factor(clust_3cl))) +
+      # ggplot(aes(x = factor(clust_3cl_new), y = SRP_kg_km2, color = factor(clust_3cl_new))) +
+      facet_wrap(~year) +
+      geom_boxplot() +
+      scale_color_manual(name = "Cluster",
+                        values = c("#999999", "#E69F00", "#56B4E9", "#009E73", "#0072B2", "#D55E00", "#CC79A7")) +       
+      ylab(expression(atop(Event~SRP~yield, (kg~P~km^{-2})))) +
+      xlab("Cluster") +
+      theme1 +
+      theme(legend.position = "none",
+            strip.background = element_blank(),
+            strip.text.x = element_blank(),
+            axis.title.x = element_blank(),
+            axis.text.x = element_blank())    
+    
+    # 4 clusters
+    pl_hf_x5 <- 
+      som_results %>%
+      filter(site == "Hungerford") %>%
+      mutate(year = year(event_start)) %>% 
+      filter(!year %in% c(2017)) %>% 
+      ggplot(aes(x = factor(clust_4cl), y = SRP_kg_km2, color = factor(clust_4cl))) +
+      # ggplot(aes(x = factor(clust_4cl_new), y = SRP_kg_km2, color = factor(clust_4cl_new))) +
+      facet_wrap(~year) +
+      geom_boxplot() +
+      scale_color_manual(name = "Cluster",
+                        values = c("#999999", "#E69F00", "#56B4E9", "#009E73", "#0072B2", "#D55E00", "#CC79A7")) +       
+      ylab(expression(atop(Event~SRP~yield, (kg~P~km^{-2})))) +
+      xlab("Cluster") +
+      theme1 +
+      theme(legend.position = "none",
+            strip.background = element_blank(),
+            strip.text.x = element_blank(),
+            axis.title.x = element_blank(),
+            axis.text.x = element_blank(),
+            axis.title.y = element_blank(),
+            axis.text.y = element_blank())
+
+    # 5 clusters
+    pl_hf_x6 <- 
+      som_results %>%
+      filter(site == "Hungerford") %>%
+      # Re-number, re-order, & re-color SOM clusters
+      # Use the spreadsheet in Data/planning_cluster_colors_and_order.xlsx to organize this. Very helpful!
+      # mutate(clust_5cl_new = ifelse(clust_5cl == 1, 2,
+      #                           ifelse(clust_5cl == 2, 1, 
+      #                                  ifelse(clust_5cl == 3, 4,
+      #                                         ifelse(clust_5cl == 4, 3,
+      #                                                ifelse(clust_5cl == 5, 5, NA)))))) %>% 
+      # mutate(clust_5cl_new = factor(clust_5cl_new,
+      #                               levels = c("1", "2", "3", "4", "5"))) %>%       
+      mutate(year = year(event_start)) %>% 
+      filter(!year %in% c(2017)) %>% 
+      ggplot(aes(x = factor(clust_5cl), y = SRP_kg_km2, color = factor(clust_5cl))) +
+      # ggplot(aes(x = factor(clust_5cl_new), y = SRP_kg_km2, color = factor(clust_5cl_new))) +
+      facet_wrap(~year) +
+      geom_boxplot() +
+      scale_color_manual(name = "Cluster",
+                        values = c("#999999", "#E69F00", "#56B4E9", "#009E73", "#0072B2", "#D55E00", "#CC79A7")) +       
+      # scale_color_manual(name = "Cluster",
+      #             values = c("#999999", "#E69F00", "#56B4E9", "#009E73", "#0072B2", "#D55E00", "#CC79A7"),
+      #             labels = c("Cool; wet; high DO/red.; pre: higher Q, \nno recent event; small low-int. events",
+      #                        "Wet; low DO/red.; pre: drier, recent \nevent; small low-int. events",
+      #                        "Hot; dry; high DO/red.; pre: dry, \nno recent event; large low-Q events",
+      #                        "Warm; wet; low DO/red.; pre: recent \nevent; large, low-int. high-Q events",
+      #                        "Cold; high DO/red.; pre: no \nrecent event; long events")) +
+      # scale_color_manual(name = "Cluster",
+      #             values = c("#999999", "#56B4E9", "#009E73", "#D55E00", "#0072B2", "#E69F00", "#CC79A7"),
+      #             labels = c("Wet; low DO/red.; pre: drier, recent \nevent; small low-int. events",
+      #                        "Cool; wet; high DO/red.; pre: higher Q, \nno recent event; small low-int. events",
+      #                        "Warm; wet; low DO/red.; pre: recent \nevent; large, low-int. high-Q events",
+      #                        "Hot; dry; high DO/red.; pre: dry, \nno recent event; large low-Q events",
+      #                        "Cold; high DO/red.; pre: no \nrecent event; long events")) +   
+      ylab(expression(atop(Event~SRP~yield, (kg~P~km^{-2})))) +
+      xlab("Cluster") +
+      theme1 +
+      theme(legend.position = "none",
+            strip.background = element_blank(),
+            strip.text.x = element_blank(),
+            axis.title.x = element_blank(),
+            axis.text.x = element_blank(),
+            axis.title.y = element_blank(),
+            axis.text.y = element_blank())
+    
+  # TURB
+    # 3 clusters
+    pl_hf_x7 <- 
+      som_results %>%
+      filter(site == "Hungerford") %>% 
+      mutate(year = year(event_start)) %>% 
+      filter(!year %in% c(2017)) %>% 
+      ggplot(aes(x = factor(clust_3cl), y = turb_kg_km2, color = factor(clust_3cl))) +
+      # ggplot(aes(x = factor(clust_3cl_new), y = turb_kg_km2, color = factor(clust_3cl_new))) +
+      facet_wrap(~year) +
+      geom_boxplot() +
+      scale_color_manual(name = "Cluster",
+                        values = c("#999999", "#E69F00", "#56B4E9", "#009E73", "#0072B2", "#D55E00", "#CC79A7")) +       
+      ylab(expression(atop(Event~turb.~yield, (Sigma~NTU~km^{-2})))) +
+      xlab("Cluster") +
+      theme1 +
+      theme(legend.position = "none",
+            strip.background = element_blank(),
+            strip.text.x = element_blank())    
+    
+    # 4 clusters
+    pl_hf_x8 <- 
+      som_results %>%
+      filter(site == "Hungerford") %>% 
+       
+      mutate(year = year(event_start)) %>% 
+      filter(!year %in% c(2017)) %>%  
+      ggplot(aes(x = factor(clust_4cl), y = turb_kg_km2, color = factor(clust_4cl))) +
+      # ggplot(aes(x = factor(clust_4cl_new), y = turb_kg_km2, color = factor(clust_4cl_new))) +
+      facet_wrap(~year) +
+      geom_boxplot() +
+      scale_color_manual(name = "Cluster",
+                        values = c("#999999", "#E69F00", "#56B4E9", "#009E73", "#0072B2", "#D55E00", "#CC79A7")) +       
+      ylab(expression(atop(Event~turb.~yield, (Sigma~NTU~km^{-2})))) +
+      xlab("Cluster") +
+      theme1 +
+      theme(legend.position = "none",
+            strip.background = element_blank(),
+            strip.text.x = element_blank(),
+            axis.title.y = element_blank(),
+            axis.text.y = element_blank())
+    
+    # 5 clusters
+    pl_hf_x9 <- 
+      som_results %>%
+      filter(site == "Hungerford") %>% 
+      # Re-number, re-order, & re-color SOM clusters
+      # Use the spreadsheet in Data/planning_cluster_colors_and_order.xlsx to organize this. Very helpful!
+      # mutate(clust_5cl_new = ifelse(clust_5cl == 1, 2,
+      #                           ifelse(clust_5cl == 2, 1, 
+      #                                  ifelse(clust_5cl == 3, 4,
+      #                                         ifelse(clust_5cl == 4, 3,
+      #                                                ifelse(clust_5cl == 5, 5, NA)))))) %>% 
+      # mutate(clust_5cl_new = factor(clust_5cl_new,
+      #                               levels = c("1", "2", "3", "4", "5"))) %>%         
+      mutate(year = year(event_start)) %>% 
+      filter(!year %in% c(2017)) %>% 
+      ggplot(aes(x = factor(clust_5cl), y = turb_kg_km2, color = factor(clust_5cl))) +
+      # ggplot(aes(x = factor(clust_5cl_new), y = turb_kg_km2, color = factor(clust_5cl_new))) +
+      facet_wrap(~year) +
+      geom_boxplot() +
+      scale_color_manual(name = "Cluster",
+                        values = c("#999999", "#E69F00", "#56B4E9", "#009E73", "#0072B2", "#D55E00", "#CC79A7")) +       
+      # scale_color_manual(name = "Cluster",
+      #             values = c("#999999", "#E69F00", "#56B4E9", "#009E73", "#0072B2", "#D55E00", "#CC79A7"),
+      #             labels = c("Cool; wet; high DO/red.; pre: higher Q, \nno recent event; small low-int. events",
+      #                        "Wet; low DO/red.; pre: drier, recent \nevent; small low-int. events",
+      #                        "Hot; dry; high DO/red.; pre: dry, \nno recent event; large low-Q events",
+      #                        "Warm; wet; low DO/red.; pre: recent \nevent; large, low-int. high-Q events",
+      #                        "Cold; high DO/red.; pre: no \nrecent event; long events")) +
+      # scale_color_manual(name = "Cluster",
+      #             values = c("#999999", "#56B4E9", "#009E73", "#D55E00", "#0072B2", "#E69F00", "#CC79A7"),
+      #             labels = c("Wet; low DO/red.; pre: drier, recent \nevent; small low-int. events",
+      #                        "Cool; wet; high DO/red.; pre: higher Q, \nno recent event; small low-int. events",
+      #                        "Warm; wet; low DO/red.; pre: recent \nevent; large, low-int. high-Q events",
+      #                        "Hot; dry; high DO/red.; pre: dry, \nno recent event; large low-Q events",
+      #                        "Cold; high DO/red.; pre: no \nrecent event; long events")) +  
+      ylab(expression(atop(Event~turb.~yield, (Sigma~NTU~km^{-2})))) +
+      xlab("Cluster") +
+      theme1 +
+      theme(legend.position = "none",
+            strip.background = element_blank(),
+            strip.text.x = element_blank(),
+            axis.title.y = element_blank(),
+            axis.text.y = element_blank())
+
+# Combine plots
+  # Hungerford
+    # Yields
+      # Comparing 3 models
+      (pl_hf_x1 | pl_hf_x2 | pl_hf_x3) / (pl_hf_x4 | pl_hf_x5 | pl_hf_x6) / (pl_hf_x7 | pl_hf_x8 | pl_hf_x9)
+      # Just 1 model (5 cluster model)
+      # pl_hf_x2 / pl_hf_x4 / pl_hf_x6
+```
+
+### Ice-free season yields attributed to each cluster
+#### Not showing 2017 because we only captured events in the last 1/3 of the year
+#### I wasn't going to show 2020 here, but I think we got the sensors out at a similar time as previous years; at Wade we didn't
+<br><br>
+```{r contr of clust to yields, include = TRUE, echo = FALSE, message = FALSE, warning = FALSE, fig.asp = 1.2}
+# ```{r contr of clust to yields, include = TRUE, echo = FALSE, message = FALSE, warning = FALSE, fig.width = 10, fig.asp = 1, out.width = "100%"}
+# Plot total yield attributed to each cluster
+  # Calculate annual measured event yields
+  annYields <-
+    som_results %>%
+    pivot_longer(cols = c(NO3_kg_km2, SRP_kg_km2, turb_kg_km2), names_to = "var", values_to = "yield") %>% 
+    pivot_longer(cols = c(clust_3cl, clust_4cl, clust_5cl), names_to = "model", values_to = "clust_no") %>% 
+    mutate(year = year(event_start)) %>% 
+    select(site, year, var, model, clust_no, yield) %>% 
+    group_by(site, year, var, model) %>% 
+    summarize(ann_tot_yield = sum(yield, na.rm = TRUE)) %>% 
+    ungroup()
+
+  # Calculate amount of annual yields per cluster
+  annYields_perCluster <-
+    som_results %>% 
+    pivot_longer(cols = c(NO3_kg_km2, SRP_kg_km2, turb_kg_km2), names_to = "var", values_to = "yield") %>% 
+    pivot_longer(cols = c(clust_3cl, clust_4cl, clust_5cl), names_to = "model", values_to = "clust_no") %>% 
+    mutate(year = year(event_start)) %>% 
+    select(site, year, var, model, clust_no, yield) %>% 
+    group_by(site, year, var, model, clust_no) %>% 
+    summarize(ann_clust_yield = sum(yield, na.rm = TRUE)) %>% 
+    ungroup()
+  
+  # Join these together
+  # And calculate proportion of total annual yield attributed to each cluster
+  annYields_summ <-
+    full_join(annYields_perCluster, annYields, by = c("site", "year", "var", "model")) %>% 
+    mutate(prop_clust_yield = ann_clust_yield/ann_tot_yield)
+  rm(annYields, annYields_perCluster)
+    
+  # Stacked bar graph (year on x-axis; stacks = yields by cluster)
+  # Total & proportional annual event yield per cluster
+    # HFORD
+    # 3 clusters
+    pl_hf_3cl_2 <- 
+      annYields_summ %>%
+      filter(site == "Hungerford") %>% 
+      filter(model == "clust_3cl") %>% 
+      pivot_longer(cols = c(ann_clust_yield, prop_clust_yield), names_to = "yield_cat", values_to = "yield") %>% 
+      mutate(yield_cat = factor(yield_cat, 
+                          levels = c("ann_clust_yield", "prop_clust_yield"),
+                          labels = c(expression(Total~yield), expression(Prop.~yield)))) %>% 
+      mutate(var = factor(var, 
+                          levels = c("NO3_kg_km2", "SRP_kg_km2", "turb_kg_km2"), 
+                          labels = c(expression(NO[3]^-{}~(kg~N~km^{-2})) , expression(SRP~(kg~P~km^{-2})), expression(Turb.~(Sigma~NTU~km^{-2}))))) %>% 
+      # Exclude 2017 events  
+      filter(!year %in% c(2017)) %>% 
+      ggplot(aes(x = factor(year), y = yield, fill = factor(clust_no))) +
+      # ggplot(aes(x = factor(year), y = yield, fill = factor(clust_no_new))) + 
+        facet_wrap(var~yield_cat, ncol = 2, scales = "free_y", labeller = label_parsed) +
+        geom_bar(position = "stack", stat = "identity") +
+        scale_fill_manual(name = "Cluster",
+                          values = c("#999999", "#E69F00", "#56B4E9", "#009E73", "#0072B2", "#D55E00", "#CC79A7")) +       
+        ylab(expression(atop(Event~total~or~prop.~yield, "during ice-free season"))) +
+        xlab("Year") +
+        theme1 +
+        theme(axis.title.x = element_blank(),
+              strip.background = element_blank()) +
+      ggtitle("Hungerford - 3 clusters")   
+  
+    # 4 clusters
+    pl_hf_4cl_2 <- 
+      annYields_summ %>%
+      filter(site == "Hungerford") %>% 
+      filter(model == "clust_4cl") %>% 
+      pivot_longer(cols = c(ann_clust_yield, prop_clust_yield), names_to = "yield_cat", values_to = "yield") %>% 
+      mutate(yield_cat = factor(yield_cat, 
+                          levels = c("ann_clust_yield", "prop_clust_yield"),
+                          labels = c(expression(Total~yield), expression(Prop.~yield)))) %>% 
+      mutate(var = factor(var, 
+                          levels = c("NO3_kg_km2", "SRP_kg_km2", "turb_kg_km2"), 
+                          labels = c(expression(NO[3]^-{}~(kg~N~km^{-2})) , expression(SRP~(kg~P~km^{-2})), expression(Turb.~(Sigma~NTU~km^{-2}))))) %>% 
+      # Exclude 2017 events  
+      filter(!year %in% c(2017)) %>%
+      ggplot(aes(x = factor(year), y = yield, fill = factor(clust_no))) +
+      # ggplot(aes(x = factor(year), y = yield, fill = factor(clust_no_new))) + 
+        facet_wrap(var~yield_cat, ncol = 2, scales = "free_y", labeller = label_parsed) +
+        geom_bar(position = "stack", stat = "identity") +
+        scale_fill_manual(name = "Cluster",
+                          values = c("#999999", "#E69F00", "#56B4E9", "#009E73", "#0072B2", "#D55E00", "#CC79A7")) +       
+        ylab(expression(atop(Event~total~or~prop.~yield, "during ice-free season"))) +
+        xlab("Year") +
+        theme1 +
+        theme(axis.title.x = element_blank(),
+              strip.background = element_blank()) +
+      ggtitle("Hungerford - 4 clusters") 
+    
+    # 5 clusters
+    pl_hf_5cl_2 <- 
+      annYields_summ %>%
+      filter(site == "Hungerford") %>% 
+      filter(model == "clust_5cl") %>% 
+      # Re-number, re-order, & re-color SOM clusters
+      # Use the spreadsheet in Data/planning_cluster_colors_and_order.xlsx to organize this. Very helpful!
+      # mutate(clust_no_new = ifelse(clust_no == 1, 2,
+      #                           ifelse(clust_no == 2, 1, 
+      #                                  ifelse(clust_no == 3, 4,
+      #                                         ifelse(clust_no == 4, 3,
+      #                                                ifelse(clust_no == 5, 5, NA)))))) %>% 
+      # mutate(clust_no_new = factor(clust_no_new,
+      #                               levels = c("1", "2", "3", "4", "5"))) %>%    
+      pivot_longer(cols = c(ann_clust_yield, prop_clust_yield), names_to = "yield_cat", values_to = "yield") %>% 
+      mutate(yield_cat = factor(yield_cat, 
+                          levels = c("ann_clust_yield", "prop_clust_yield"),
+                          labels = c(expression(Total~yield), expression(Prop.~yield)))) %>% 
+      mutate(var = factor(var, 
+                          levels = c("NO3_kg_km2", "SRP_kg_km2", "turb_kg_km2"), 
+                          labels = c(expression(NO[3]^-{}~(kg~N~km^{-2})) , expression(SRP~(kg~P~km^{-2})), expression(Turb.~(Sigma~NTU~km^{-2}))))) %>% 
+      # Exclude 2017 events  
+      filter(!year %in% c(2017)) %>%
+      ggplot(aes(x = factor(year), y = yield, fill = factor(clust_no))) +
+      # ggplot(aes(x = factor(year), y = yield, fill = factor(clust_no_new))) + 
+        facet_wrap(var~yield_cat, ncol = 2, scales = "free_y", labeller = label_parsed) +
+        geom_bar(position = "stack", stat = "identity") +
+        scale_fill_manual(name = "Cluster",
+                          values = c("#999999", "#E69F00", "#56B4E9", "#009E73", "#0072B2", "#D55E00", "#CC79A7")) +      
+        # scale_fill_manual(name = "Cluster",
+        #             values = c("#999999", "#56B4E9", "#009E73", "#D55E00", "#0072B2", "#E69F00", "#CC79A7"),
+        #             labels = c("Wet; low DO/red.; pre: drier, recent \nevent; small low-int. events",
+        #                        "Cool; wet; high DO/red.; pre: higher Q, \nno recent event; small low-int. events",
+        #                        "Warm; wet; low DO/red.; pre: recent \nevent; large, low-int. high-Q events",
+        #                        "Hot; dry; high DO/red.; pre: dry, \nno recent event; large low-Q events",
+        #                        "Cold; high DO/red.; pre: no \nrecent event; long events")) +  
+        ylab(expression(atop(Event~total~or~prop.~yield, "during ice-free season"))) +
+        xlab("Year") +
+        theme1 +
+        theme(axis.title.x = element_blank(),
+              strip.background = element_blank()) +
+      ggtitle("Hungerford - 5 clusters")    
+
+  # Print
+  pl_hf_3cl_2
+  pl_hf_4cl_2
+  pl_hf_5cl_2
+```
+
+Total ice-free season water yield attributed to each cluster.
+Keep in mind that a different SOM was created for each site x variable (e.g., NO3, SRP) combo; thus, the clusters may not have the same properties for each site x variable combination.
+<br><br>
+
+### Relationship between event NO3, SRP, or turbidity yield and event water yield for each season
+
+```{r run regressions, include=FALSE, warning=FALSE, message = FALSE}
+# Bind hford and wade dfs together
+# site_dat <- bind_rows(hford, wade)
+
+# Regress event yield on event water yield
+# Get stats on coefficient estimates
+lm_results_coef <- 
+  hford %>% 
+  pivot_longer(cols = c(NO3_kg_km2, SRP_kg_km2, turb_kg_km2), names_to = "var", values_to = "yield") %>% 
+  # Group and nest these groupings
+  group_by(site, season, var) %>% 
+  nest() %>% 
+  mutate(model = map(data, ~ lm(yield ~ q_mm, data = .x)),
+         tidied = map(model, tidy)) %>% 
+  unnest(tidied) %>% 
+  filter(term != "(Intercept)") %>% 
+  select(-c(data, model)) %>% 
+  ungroup()
+
+# Get R^2 and other summary stats
+lm_results_r2 <-
+  hford %>% 
+  pivot_longer(cols = c(NO3_kg_km2, SRP_kg_km2, turb_kg_km2), names_to = "var", values_to = "yield") %>% 
+  # Group and nest these groupings
+  group_by(site, season, var) %>% 
+  nest() %>% 
+  mutate(model = map(data, ~ lm(yield ~ q_mm, data = .x)),
+         glanced = map(model, glance),
+         augmented = map(model, augment)) %>% 
+  unnest(glanced) %>% 
+  select(-c(data, model)) %>% 
+  ungroup()
+
+# Join these together
+lm_results <- 
+  full_join(lm_results_coef, lm_results_r2, by = c("var", "site", "season")) %>% 
+  unnest(augmented)
+rm(lm_results_coef, lm_results_r2)
+
+# Add event & SOM cluster assign info to this df
+# allData <- 
+#   lm_results %>% 
+#   left_join(hford %>% 
+#               pivot_longer(cols = c(NO3_kg_km2, SRP_kg_km2, turb_kg_km2), names_to = "var", values_to = "yield"),
+#             by = c("site", "season", "var", "yield", "q_mm")) %>% 
+#   left_join(som_results %>% 
+#               select(site, event_start, season, clust_3cl, clust_4cl, clust_5cl),
+#             by = c("site", "season", "event_start")) %>% 
+#   select(site, season, event_start, starts_with("clust"), everything()) %>% 
+#   arrange(site, event_start)
+
+# allData %>% 
+#   mutate(event_start = as.character(event_start)) %>% 
+#   write_csv("Data/results_clusters_withLinearRegressions.csv")
+
+```
+
+```{r plot regressions, include = TRUE, echo = FALSE, message = FALSE, warning = FALSE, fig.width = 9, fig.asp = 0.6, out.width = "100%"}
+# ```{r, include = TRUE, echo = FALSE, message = FALSE, warning = FALSE, fig.width = 9, fig.asp = 0.6, out.width = "100%"}
+#fig.width = 10, fig.asp = .7, out.width = "100%"
+
+# Plot NO3, SRP, & turbidity yields against water yield
+# HFORD - NOTE: might need to do segmented regression for turbidity fit
+  # 4 cluster model
+  # Faceted by solute & season
+  pl_hf_3cl_3 <-
+    som_results %>%
+    left_join(hford %>% select(site, event_start, q_mm)) %>% 
+    pivot_longer(cols = c(NO3_kg_km2, SRP_kg_km2, turb_kg_km2), names_to = "var", values_to = "yield") %>% 
+    mutate(season = factor(season, levels = c("spring", "summer", "fall"), labels = c("Spring", "Summer", "Fall"))) %>%
+    # Adding the expressions as labels requires that you add labeller = label_parsed in the facet_* call below
+    mutate(var = factor(var, 
+                        levels = c("NO3_kg_km2", "SRP_kg_km2", "turb_kg_km2"), 
+                        labels = c(expression(NO[3]^-{}~(kg~N~km^{-2})) , expression(SRP~(kg~P~km^{-2})), expression(Turb.~(Sigma~NTU~km^{-2}))))) %>%   
+    ggplot(aes(x = q_mm, y = yield)) +
+      facet_grid(var~season, scales = "free_y", labeller = label_parsed) +
+      geom_smooth(method=lm, se=FALSE, color = "black") +
+      geom_point(aes(color = factor(as.character(clust_3cl)), shape = factor(as.character(year(event_start)))), size = 2, stroke = 0.75, alpha = 0.8) +
+      scale_color_manual(name = "Cluster",
+                        values = c("#999999", "#E69F00", "#56B4E9", "#009E73", "#0072B2", "#D55E00", "#CC79A7")) +
+      ylab(expression(Event~NO[3]^-{}~or~SRP~or~turb.~yield)) +
+      xlab("Event water yield (mm)") +
+      theme1 +
+      theme(strip.background = element_blank(),
+            legend.position = "none") +
+      ggtitle("Hungerford - 3 cluster model")
+  
+  # Plot standardized residuals
+  pl_hf_3cl_4 <-
+    som_results %>%
+    left_join(hford %>% select(site, event_start, q_mm)) %>% 
+    pivot_longer(cols = c(NO3_kg_km2, SRP_kg_km2, turb_kg_km2), names_to = "var", values_to = "yield") %>% 
+    left_join(lm_results) %>% 
+    mutate(season = factor(season, levels = c("spring", "summer", "fall"), labels = c("Spring", "Summer", "Fall"))) %>%
+    # Adding the expressions as labels requires that you add labeller = label_parsed in the facet_* call below
+    mutate(var = factor(var, 
+                        levels = c("NO3_kg_km2", "SRP_kg_km2", "turb_kg_km2"), 
+                        labels = c(expression(NO[3]^-{}~(kg~N~km^{-2})) , expression(SRP~(kg~P~km^{-2})), expression(Turb.~(Sigma~NTU~km^{-2}))))) %>%  
+      ggplot(aes(x = q_mm, y = .std.resid)) +
+      facet_grid(var~season, scales = "free_y", labeller = label_parsed) +
+      geom_hline(yintercept = 0, color = "black", linetype = "dashed") +
+      geom_hline(yintercept = -2, color = "gray80", linetype = "dashed") +
+      geom_hline(yintercept = 2, color = "gray80", linetype = "dashed") +
+      geom_point(aes(color = factor(clust_3cl), shape = factor(year(event_start))), size = 2, stroke = 0.75, alpha = 0.8) +
+      scale_color_manual(name = "Cluster",
+                        values = c("#999999", "#E69F00", "#56B4E9", "#009E73", "#0072B2", "#D55E00", "#CC79A7")) +
+      ylab("Std. residuals") +
+      xlab("Event water yield (mm)") +
+      theme1 +
+      theme(strip.background = element_blank())
+
+  # 4 cluster model
+  # Faceted by solute & season
+  pl_hf_4cl_3 <-
+    som_results %>%
+    left_join(hford %>% select(site, event_start, q_mm)) %>% 
+    pivot_longer(cols = c(NO3_kg_km2, SRP_kg_km2, turb_kg_km2), names_to = "var", values_to = "yield") %>% 
+    mutate(season = factor(season, levels = c("spring", "summer", "fall"), labels = c("Spring", "Summer", "Fall"))) %>%
+    # Adding the expressions as labels requires that you add labeller = label_parsed in the facet_* call below
+    mutate(var = factor(var, 
+                        levels = c("NO3_kg_km2", "SRP_kg_km2", "turb_kg_km2"), 
+                        labels = c(expression(NO[3]^-{}~(kg~N~km^{-2})) , expression(SRP~(kg~P~km^{-2})), expression(Turb.~(Sigma~NTU~km^{-2}))))) %>%   
+    ggplot(aes(x = q_mm, y = yield)) +
+      facet_grid(var~season, scales = "free_y", labeller = label_parsed) +
+      geom_smooth(method=lm, se=FALSE, color = "black") +
+      geom_point(aes(color = factor(as.character(clust_4cl)), shape = factor(as.character(year(event_start)))), size = 2, stroke = 0.75, alpha = 0.8) +
+      scale_color_manual(name = "Cluster",
+                        values = c("#999999", "#E69F00", "#56B4E9", "#009E73", "#0072B2", "#D55E00", "#CC79A7")) +
+      ylab(expression(Event~NO[3]^-{}~or~SRP~or~turb.~yield)) +
+      xlab("Event water yield (mm)") +
+      theme1 +
+      theme(strip.background = element_blank(),
+            legend.position = "none") +
+      ggtitle("Hungerford - 4 cluster model")
+  
+  # Plot standardized residuals
+  pl_hf_4cl_4 <-
+    som_results %>%
+    left_join(hford %>% select(site, event_start, q_mm)) %>% 
+    pivot_longer(cols = c(NO3_kg_km2, SRP_kg_km2, turb_kg_km2), names_to = "var", values_to = "yield") %>% 
+    left_join(lm_results) %>% 
+    mutate(season = factor(season, levels = c("spring", "summer", "fall"), labels = c("Spring", "Summer", "Fall"))) %>%
+    # Adding the expressions as labels requires that you add labeller = label_parsed in the facet_* call below
+    mutate(var = factor(var, 
+                        levels = c("NO3_kg_km2", "SRP_kg_km2", "turb_kg_km2"), 
+                        labels = c(expression(NO[3]^-{}~(kg~N~km^{-2})) , expression(SRP~(kg~P~km^{-2})), expression(Turb.~(Sigma~NTU~km^{-2}))))) %>%  
+      ggplot(aes(x = q_mm, y = .std.resid)) +
+      facet_grid(var~season, scales = "free_y", labeller = label_parsed) +
+      geom_hline(yintercept = 0, color = "black", linetype = "dashed") +
+      geom_hline(yintercept = -2, color = "gray80", linetype = "dashed") +
+      geom_hline(yintercept = 2, color = "gray80", linetype = "dashed") +
+      geom_point(aes(color = factor(clust_4cl), shape = factor(year(event_start))), size = 2, stroke = 0.75, alpha = 0.8) +
+      scale_color_manual(name = "Cluster",
+                        values = c("#999999", "#E69F00", "#56B4E9", "#009E73", "#0072B2", "#D55E00", "#CC79A7")) +
+      ylab("Std. residuals") +
+      xlab("Event water yield (mm)") +
+      theme1 +
+      theme(strip.background = element_blank())
+    
+  # 5 cluster model
+  # Faceted by solute & season
+  pl_hf_5cl_3 <- 
+    som_results %>%
+    left_join(hford %>% select(site, event_start, q_mm)) %>% 
+    pivot_longer(cols = c(NO3_kg_km2, SRP_kg_km2, turb_kg_km2), names_to = "var", values_to = "yield") %>% 
+    left_join(lm_results) %>% 
+    # Re-number, re-order, & re-color SOM clusters
+    # Use the spreadsheet in Data/planning_cluster_colors_and_order.xlsx to organize this. Very helpful!
+    # mutate(clust_5cl_new = ifelse(clust_5cl == 1, 2,
+    #                           ifelse(clust_5cl == 2, 1, 
+    #                                  ifelse(clust_5cl == 3, 4,
+    #                                         ifelse(clust_5cl == 4, 3,
+    #                                                ifelse(clust_5cl == 5, 5, NA)))))) %>% 
+    # mutate(clust_5cl_new = factor(clust_5cl_new,
+    #                               levels = c("1", "2", "3", "4", "5"))) %>%   
+    mutate(season = factor(season, levels = c("spring", "summer", "fall"), labels = c("Spring", "Summer", "Fall"))) %>%
+    # Adding the expressions as labels requires that you add labeller = label_parsed in the facet_* call below
+    mutate(var = factor(var, 
+                        levels = c("NO3_kg_km2", "SRP_kg_km2", "turb_kg_km2"), 
+                        labels = c(expression(NO[3]^-{}~(kg~N~km^{-2})) , expression(SRP~(kg~P~km^{-2})), expression(Turb.~(Sigma~NTU~km^{-2}))))) %>%  
+    ggplot(aes(x = q_mm, y = yield)) +
+      facet_grid(var~season, scales = "free_y", labeller = label_parsed) +
+      geom_smooth(method=lm, se=FALSE, color = "black") +
+      geom_point(aes(color = factor(clust_5cl), shape = factor(year(event_start))), size = 2, stroke = 0.75, alpha = 0.8) +
+       # geom_point(aes(color = factor(clust_5cl_new), shape = factor(year(event_start))), size = 2, stroke = 0.75, alpha = 0.8) +
+        # scale_shape_manual(name = "Season",
+        #                    values = c(19, 17, 15)) +
+      scale_color_manual(name = "Cluster",
+                        values = c("#999999", "#E69F00", "#56B4E9", "#009E73", "#0072B2", "#D55E00", "#CC79A7")) +    
+        # scale_color_manual(name = "Cluster",
+        #             values = c("#999999", "#56B4E9", "#009E73", "#D55E00", "#0072B2", "#E69F00", "#CC79A7"),
+        #             labels = c("Wet; low DO/red.; pre: drier, recent \nevent; small low-int. events",
+        #                        "Cool; wet; high DO/red.; pre: higher Q, \nno recent event; small low-int. events",
+        #                        "Warm; wet; low DO/red.; pre: recent \nevent; large, low-int. high-Q events",
+        #                        "Hot; dry; high DO/red.; pre: dry, \nno recent event; large low-Q events",
+        #                        "Cold; high DO/red.; pre: no \nrecent event; long events")) + 
+      ylab(expression(Event~NO[3]^-{}~or~SRP~or~turb.~yield)) +
+      xlab("Event water yield (mm)") +
+      theme1 +
+      theme(strip.background = element_blank(),
+            legend.position = "none",
+            axis.title.x = element_blank()) +
+      ggtitle("Hungerford - 5 cluster model")
+  
+    # Plot standardized residuals - scatter plot
+    pl_hf_5cl_4 <-
+    som_results %>%
+    left_join(hford %>% select(site, event_start, q_mm)) %>% 
+    pivot_longer(cols = c(NO3_kg_km2, SRP_kg_km2, turb_kg_km2), names_to = "var", values_to = "yield") %>% 
+    left_join(lm_results) %>% 
+      # Re-number, re-order, & re-color SOM clusters
+      # Use the spreadsheet in Data/planning_cluster_colors_and_order.xlsx to organize this. Very helpful!
+      # mutate(clust_5cl_new = ifelse(clust_5cl == 1, 2,
+      #                           ifelse(clust_5cl == 2, 1, 
+      #                                  ifelse(clust_5cl == 3, 4,
+      #                                         ifelse(clust_5cl == 4, 3,
+      #                                                ifelse(clust_5cl == 5, 5, NA)))))) %>% 
+      # mutate(clust_5cl_new = factor(clust_5cl_new,
+      #                               levels = c("1", "2", "3", "4", "5"))) %>%         
+      mutate(season = factor(season, levels = c("spring", "summer", "fall"), labels = c("Spring", "Summer", "Fall"))) %>%
+      # Adding the expressions as labels requires that you add labeller = label_parsed in the facet_* call below
+      mutate(var = factor(var, 
+                          levels = c("NO3_kg_km2", "SRP_kg_km2", "turb_kg_km2"), 
+                          labels = c(expression(NO[3]^-{}~(kg~N~km^{-2})) , expression(SRP~(kg~P~km^{-2})), expression(Turb.~(Sigma~NTU~km^{-2}))))) %>%  
+      ggplot(aes(x = q_mm, y = .std.resid)) +
+      facet_grid(var~season, scales = "free_y", labeller = label_parsed) +
+      geom_hline(yintercept = 0, color = "black", linetype = "dashed") +
+      geom_hline(yintercept = -2, color = "gray80", linetype = "dashed") +
+      geom_hline(yintercept = 2, color = "gray80", linetype = "dashed") +
+      geom_point(aes(color = factor(clust_5cl), shape = factor(year(event_start))), size = 2, stroke = 0.75, alpha = 0.8) +
+      # geom_point(aes(color = factor(clust_5cl_new), shape = factor(year(event_start))), size = 2, stroke = 0.75, alpha = 0.8) +
+      # scale_shape_manual(name = "Year",
+      #              values = c(19, 17, 15)) +
+      scale_color_manual(name = "Cluster",
+                        values = c("#999999", "#E69F00", "#56B4E9", "#009E73", "#0072B2", "#D55E00", "#CC79A7")) +       
+      # scale_color_manual(name = "Cluster",
+      #             values = c("#999999", "#56B4E9", "#009E73", "#D55E00", "#0072B2", "#E69F00", "#CC79A7"),
+      #             labels = c("Wet; low DO/red.; pre: drier, recent \nevent; small low-int. events",
+      #                        "Cool; wet; high DO/red.; pre: higher Q, \nno recent event; small low-int. events",
+      #                        "Warm; wet; low DO/red.; pre: recent \nevent; large, low-int. high-Q events",
+      #                        "Hot; dry; high DO/red.; pre: dry, \nno recent event; large low-Q events",
+      #                        "Cold; high DO/red.; pre: no \nrecent event; long events")) + 
+      ylab("Std. residuals") +
+      xlab("Event water yield (mm)") +
+      theme1 +
+      theme(strip.background = element_blank())
+    
+    # Plot standardized residuals - boxplots
+    pl_hf_5cl_5 <-
+    som_results %>%
+    left_join(hford %>% select(site, event_start, q_mm)) %>% 
+    pivot_longer(cols = c(NO3_kg_km2, SRP_kg_km2, turb_kg_km2), names_to = "var", values_to = "yield") %>% 
+    left_join(lm_results) %>% 
+      # Re-number, re-order, & re-color SOM clusters
+      # Use the spreadsheet in Data/planning_cluster_colors_and_order.xlsx to organize this. Very helpful!
+      # mutate(clust_5cl_new = ifelse(clust_5cl == 1, 2,
+      #                           ifelse(clust_5cl == 2, 1, 
+      #                                  ifelse(clust_5cl == 3, 4,
+      #                                         ifelse(clust_5cl == 4, 3,
+      #                                                ifelse(clust_5cl == 5, 5, NA)))))) %>% 
+      # mutate(clust_5cl_new = factor(clust_5cl_new,
+      #                               levels = c("1", "2", "3", "4", "5"))) %>%         
+      mutate(season = factor(season, levels = c("spring", "summer", "fall"), labels = c("Spring", "Summer", "Fall"))) %>%
+      # Adding the expressions as labels requires that you add labeller = label_parsed in the facet_* call below
+      mutate(var = factor(var, 
+                          levels = c("NO3_kg_km2", "SRP_kg_km2", "turb_kg_km2"), 
+                          labels = c(expression(NO[3]^-{}~(kg~N~km^{-2})) , expression(SRP~(kg~P~km^{-2})), expression(Turb.~(Sigma~NTU~km^{-2}))))) %>%  
+      ggplot(aes(x = factor(clust_5cl), y = .std.resid)) +
+      # ggplot(aes(x = factor(clust_5cl_new), y = .std.resid)) +
+      facet_grid(var~season, scales = "free_y", labeller = label_parsed) +
+      geom_hline(yintercept = 0, color = "black", linetype = "dashed") +
+      geom_hline(yintercept = -2, color = "gray80", linetype = "dashed") +
+      geom_hline(yintercept = 2, color = "gray80", linetype = "dashed") +
+      geom_boxplot(aes(color = factor(clust_5cl))) +
+      # geom_boxplot(aes(color = factor(clust_5cl_new))) +
+      # scale_shape_manual(name = "Year",
+      #              values = c(19, 17, 15)) +
+      scale_color_manual(name = "Cluster",
+                        values = c("#999999", "#E69F00", "#56B4E9", "#009E73", "#0072B2", "#D55E00", "#CC79A7")) +      
+      # scale_color_manual(name = "Cluster",
+      #             values = c("#999999", "#56B4E9", "#009E73", "#D55E00", "#0072B2", "#E69F00", "#CC79A7"),
+      #             labels = c("Wet; low DO/red.; pre: drier, recent \nevent; small low-int. events",
+      #                        "Cool; wet; high DO/red.; pre: higher Q, \nno recent event; small low-int. events",
+      #                        "Warm; wet; low DO/red.; pre: recent \nevent; large, low-int. high-Q events",
+      #                        "Hot; dry; high DO/red.; pre: dry, \nno recent event; large low-Q events",
+      #                        "Cold; high DO/red.; pre: no \nrecent event; long events")) +   
+      ylab("Std. residuals") +
+      xlab("Event water yield (mm)") +
+      theme1 +
+      theme(strip.background = element_blank(),
+            strip.text.x = element_blank())      
+
+
+# Combine plots
+  # Seasonal plots
+    # Comparing regressions vs. std. resids as scatter plot
+    pl_hf_3cl_3 | pl_hf_3cl_4
+    pl_hf_4cl_3 | pl_hf_4cl_4
+    pl_hf_5cl_3 | pl_hf_5cl_4
+    
+    # Comparing regressions vs. std. resids as boxplots
+    # pl_hf_5cl_3 / pl_hf_5cl_5
+```
+
+Need to remove outliers from regressions.
+<br><br>
+
+### Event NO3 to SRP yield ratios
+
+```{r yield ratios, include = TRUE, echo = FALSE, message = FALSE, warning = FALSE, fig.asp = 1.4}
+# ```{r yield ratios, include = TRUE, echo = FALSE, message = FALSE, warning = FALSE, fig.width = 9, fig.asp = 0.7, out.width = "100%"}
+# HFORD
+# 3 cluster model
+  pl_rat_hf_1 <-
+    som_results %>%
+    filter(site == "Hungerford") %>%
+    left_join(hford %>% select(site, event_start, q_mm), by = c("site", "event_start")) %>%
+    ggplot(aes(x = q_mm, y = event_NO3_SRP, color = factor(clust_3cl))) +
+      geom_point(size = 2, stroke = 0.75, alpha = 0.8) +
+      scale_color_manual(name = "Cluster",
+                        values = c("#999999", "#E69F00", "#56B4E9", "#009E73", "#0072B2", "#D55E00", "#CC79A7")) +    
+      geom_hline(yintercept = 16, linetype = "dashed", size = 0.75, color = "gray40") +
+      ylab(expression(atop(Molar~ratio~of~NO[3]^-{}~":"~SRP~yield, "for"~each~event))) +
+      xlab("Event water yield (mm)") +
+      scale_y_continuous(limits = c(0, 1300), breaks=seq(0, 1200, 300)) +
+      scale_x_continuous(limits = c(0, 80), breaks=seq(0, 80, 20)) +
+      theme1 +
+      theme(axis.title.y = element_text(margin=margin(0,5,0,0)),
+            # legend.position = c(0.85, 0.7),
+            axis.title.x = element_blank()) +
+    ggtitle("HFORD - 3 cluster model")
+
+# 4 cluster model
+  pl_rat_hf_2 <-
+    som_results %>%
+    filter(site == "Hungerford") %>%
+    left_join(hford %>% select(site, event_start, q_mm), by = c("site", "event_start")) %>%
+    ggplot(aes(x = q_mm, y = event_NO3_SRP, color = factor(clust_4cl))) +
+      geom_point(size = 2, stroke = 0.75, alpha = 0.8) +
+      scale_color_manual(name = "Cluster",
+                        values = c("#999999", "#E69F00", "#56B4E9", "#009E73", "#0072B2", "#D55E00", "#CC79A7")) +      
+      geom_hline(yintercept = 16, linetype = "dashed", size = 0.75, color = "gray40") +
+      ylab(expression(atop(Molar~ratio~of~NO[3]^-{}~":"~SRP~yield, "for"~each~event))) +
+      xlab("Event water yield (mm)") +
+      scale_y_continuous(limits = c(0, 1300), breaks=seq(0, 1200, 300)) +
+      scale_x_continuous(limits = c(0, 80), breaks=seq(0, 80, 20)) +
+      theme1 +
+      theme(axis.title.y = element_text(margin=margin(0,5,0,0)),
+            # legend.position = c(0.85, 0.7),
+            axis.title.x = element_blank()) +
+    ggtitle("HFORD - 4 cluster model")
+  
+  # 5 cluster model
+  pl_rat_hf_3 <-
+    som_results %>% 
+    filter(site == "Hungerford") %>% 
+    # Re-number, re-order, & re-color SOM clusters
+    # Use the spreadsheet in Data/planning_cluster_colors_and_order.xlsx to organize this. Very helpful!
+    # mutate(clust_5cl_new = ifelse(clust_5cl == 1, 2,
+    #                           ifelse(clust_5cl == 2, 1, 
+    #                                  ifelse(clust_5cl == 3, 4,
+    #                                         ifelse(clust_5cl == 4, 3,
+    #                                                ifelse(clust_5cl == 5, 5, NA)))))) %>% 
+    # mutate(clust_5cl_new = factor(clust_5cl_new,
+    #                               levels = c("1", "2", "3", "4", "5"))) %>%     
+    left_join(hford %>% select(site, event_start, q_mm), by = c("site", "event_start")) %>%
+    ggplot(aes(x = q_mm, y = event_NO3_SRP, color = factor(clust_5cl))) +
+    # ggplot(aes(x = q_mm, y = event_NO3_SRP, color = factor(clust_5cl_new))) +
+      geom_point(size = 2, stroke = 0.75, alpha = 0.8) +
+      scale_color_manual(name = "Cluster",
+                        values = c("#999999", "#E69F00", "#56B4E9", "#009E73", "#0072B2", "#D55E00", "#CC79A7")) +      
+      # scale_color_manual(name = "Cluster",
+      #             values = c("#999999", "#56B4E9", "#009E73", "#D55E00", "#0072B2", "#E69F00", "#CC79A7"),
+      #             labels = c("Wet; low DO/red.; pre: drier, recent \nevent; small low-int. events",
+      #                        "Cool; wet; high DO/red.; pre: higher Q, \nno recent event; small low-int. events",
+      #                        "Warm; wet; low DO/red.; pre: recent \nevent; large, low-int. high-Q events",
+      #                        "Hot; dry; high DO/red.; pre: dry, \nno recent event; large low-Q events",
+      #                        "Cold; high DO/red.; pre: no \nrecent event; long events")) + 
+      geom_hline(yintercept = 16, linetype = "dashed", size = 0.75, color = "gray40") +
+      ylab(expression(atop(Molar~ratio~of~NO[3]^-{}~":"~SRP~yield, "for"~each~event))) +
+      xlab("Event water yield (mm)") +
+      scale_y_continuous(limits = c(0, 1300), breaks=seq(0, 1200, 300)) +
+      scale_x_continuous(limits = c(0, 80), breaks=seq(0, 80, 20)) +
+      theme1 +
+      theme(axis.title.y = element_text(margin=margin(0,5,0,0)),
+            axis.title.x = element_blank()) +
+    ggtitle("HFORD - 5 cluster model")
+
+
+# Combine into one plot
+  # Comparing 3 models
+  pl_rat_hf_1 / pl_rat_hf_2 / pl_rat_hf_3
+  # Just 1 model
+  # pl_rat_hf_2
+```
+
+Molar ratio of NO3 to SRP yield for each event.
+The dashed horizontal line shows the 16:1 molar N:P ratio.
+<br><br>
+
+```{r yield ratios boxplots, include = TRUE, echo = FALSE, message = FALSE, warning = FALSE, fig.asp = 0.9}
+# HFORD
+  # NO3:SRP yield ratios
+  # In these plots I filter out events with ratios > 1300
+    # 3 clusters
+    pl_hf_x10 <-
+      som_results %>%
+      filter(site == "Hungerford") %>%
+      # Filter out NO3:SRP > 1300
+      filter(event_NO3_SRP < 1300) %>%
+      mutate(year = year(event_start)) %>%
+      filter(year != 2017) %>%
+      ggplot(aes(x = factor(clust_3cl), y = event_NO3_SRP, color = factor(clust_3cl))) +
+      facet_wrap(~year) +
+      geom_boxplot() +
+      scale_color_manual(name = "Cluster",
+                        values = c("#999999", "#E69F00", "#56B4E9", "#009E73", "#0072B2", "#D55E00", "#CC79A7")) +    
+      ylab(expression(atop(NO[3]^-{}~":"~SRP~yield, "for"~each~event))) +
+      xlab("Cluster") +
+      theme1 +
+      theme(legend.position = "none",
+            strip.background = element_blank(),
+            axis.title.x = element_blank(),
+            axis.text.x = element_blank()) +
+    ggtitle("3 clusters")
+
+    # 4 clusters
+    pl_hf_x11 <-
+      som_results %>%
+      filter(site == "Hungerford") %>%
+      # Filter out NO3:SRP > 1300
+      filter(event_NO3_SRP < 1300) %>%
+      mutate(year = year(event_start)) %>%
+      filter(year != 2017) %>%
+      ggplot(aes(x = factor(clust_4cl), y = event_NO3_SRP, color = factor(clust_4cl))) +
+      facet_wrap(~year) +
+      geom_boxplot() +
+      scale_color_manual(name = "Cluster",
+                        values = c("#999999", "#E69F00", "#56B4E9", "#009E73", "#0072B2", "#D55E00", "#CC79A7")) +    
+      ylab(expression(atop(Molar~ratio~of~NO[3]^-{}~":"~SRP~yield, "for"~each~event))) +
+      xlab("Cluster") +
+      theme1 +
+      theme(legend.position = "none",
+            strip.background = element_blank(),
+            axis.title.x = element_blank(),
+            axis.text.x = element_blank(),
+            axis.title.y = element_blank(),
+            axis.text.y = element_blank()) +
+    ggtitle("4 clusters")
+    
+    # 5 clusters
+    pl_hf_x12 <- 
+      som_results %>%
+      filter(site == "Hungerford") %>% 
+      # Re-number, re-order, & re-color SOM clusters
+      # Use the spreadsheet in Data/planning_cluster_colors_and_order.xlsx to organize this. Very helpful!
+      # mutate(clust_5cl_new = ifelse(clust_5cl == 1, 2,
+      #                           ifelse(clust_5cl == 2, 1, 
+      #                                  ifelse(clust_5cl == 3, 4,
+      #                                         ifelse(clust_5cl == 4, 3,
+      #                                                ifelse(clust_5cl == 5, 5, NA)))))) %>% 
+      # mutate(clust_5cl_new = factor(clust_5cl_new,
+      #                               levels = c("1", "2", "3", "4", "5"))) %>%   
+      # Filter out NO3:SRP > 1300
+      filter(event_NO3_SRP < 1300) %>%       
+      mutate(year = year(event_start)) %>% 
+      filter(year != 2017) %>% 
+      ggplot(aes(x = factor(clust_5cl), y = event_NO3_SRP, color = factor(clust_5cl))) +
+      # ggplot(aes(x = factor(clust_5cl_new), y = event_NO3_SRP, color = factor(clust_5cl_new))) +
+      facet_wrap(~year) +
+      geom_boxplot() +
+      scale_color_manual(name = "Cluster",
+                        values = c("#999999", "#E69F00", "#56B4E9", "#009E73", "#0072B2", "#D55E00", "#CC79A7")) +       
+      # scale_color_manual(name = "Cluster",
+      #             values = c("#999999", "#56B4E9", "#009E73", "#D55E00", "#0072B2", "#E69F00", "#CC79A7"),
+      #             labels = c("Wet; low DO/red.; pre: drier, recent \nevent; small low-int. events",
+      #                        "Cool; wet; high DO/red.; pre: higher Q, \nno recent event; small low-int. events",
+      #                        "Warm; wet; low DO/red.; pre: recent \nevent; large, low-int. high-Q events",
+      #                        "Hot; dry; high DO/red.; pre: dry, \nno recent event; large low-Q events",
+      #                        "Cold; high DO/red.; pre: no \nrecent event; long events")) + 
+      ylab(expression(atop(Molar~ratio~of~NO[3]^-{}~":"~SRP~yield, "for"~each~event))) +
+      xlab("Cluster") +
+      theme1 +
+      theme(legend.position = "none",
+            strip.background = element_blank(),
+            axis.title.x = element_blank(),
+            axis.text.x = element_blank(),
+            axis.title.y = element_blank(),
+            axis.text.y = element_blank()) +
+    ggtitle("5 clusters")
+    
+  # SRP:turb yield ratios
+    # 3 clusters
+    pl_hf_x13 <-
+      som_results %>%
+      filter(site == "Hungerford") %>%
+      mutate(event_SRP_turb = SRP_kg_km2/(turb_kg_km2/10)) %>%
+      mutate(year = year(event_start)) %>%
+      filter(year != 2017) %>%
+      ggplot(aes(x = factor(clust_3cl), y = event_SRP_turb, color = factor(clust_3cl))) +
+      facet_wrap(~year) +
+      geom_boxplot() +
+      scale_color_manual(name = "Cluster",
+                        values = c("#999999", "#E69F00", "#56B4E9", "#009E73", "#0072B2", "#D55E00", "#CC79A7")) +
+      ylab(expression(atop(SRP~":"~(turb.~"/"~10)~yield, "for"~each~event))) +
+      xlab("Cluster") +
+      theme1 +
+      theme(legend.position = "none",
+            strip.background = element_blank(),
+            strip.text.x = element_blank())    
+    
+    # 4 clusters
+    pl_hf_x14 <-
+      som_results %>%
+      filter(site == "Hungerford") %>%
+      mutate(event_SRP_turb = SRP_kg_km2/(turb_kg_km2/10)) %>%
+      mutate(year = year(event_start)) %>%
+      filter(year != 2017) %>%
+      ggplot(aes(x = factor(clust_4cl), y = event_SRP_turb, color = factor(clust_4cl))) +
+      facet_wrap(~year) +
+      geom_boxplot() +
+      scale_color_manual(name = "Cluster",
+                        values = c("#999999", "#E69F00", "#56B4E9", "#009E73", "#0072B2", "#D55E00", "#CC79A7")) +
+      ylab(expression(atop(Ratio~of~SRP~":"~(turb.~"/"~10)~yield, "for"~each~event))) +
+      xlab("Cluster") +
+      theme1 +
+      theme(legend.position = "none",
+            strip.background = element_blank(),
+            strip.text.x = element_blank(),
+            axis.title.y = element_blank(),
+            axis.text.y = element_blank())
+    
+    # 5 clusters
+    pl_hf_x15 <- 
+      som_results %>%
+      filter(site == "Hungerford") %>% 
+      # Re-number, re-order, & re-color SOM clusters
+      # Use the spreadsheet in Data/planning_cluster_colors_and_order.xlsx to organize this. Very helpful!
+      # mutate(clust_5cl_new = ifelse(clust_5cl == 1, 2,
+      #                           ifelse(clust_5cl == 2, 1, 
+      #                                  ifelse(clust_5cl == 3, 4,
+      #                                         ifelse(clust_5cl == 4, 3,
+      #                                                ifelse(clust_5cl == 5, 5, NA)))))) %>% 
+      # mutate(clust_5cl_new = factor(clust_5cl_new,
+      #                               levels = c("1", "2", "3", "4", "5"))) %>%         
+      mutate(event_SRP_turb = SRP_kg_km2/(turb_kg_km2/10)) %>%     
+      mutate(year = year(event_start)) %>% 
+      filter(year != 2017) %>% 
+      ggplot(aes(x = factor(clust_5cl), y = event_SRP_turb, color = factor(clust_5cl))) +
+      # ggplot(aes(x = factor(clust_5cl_new), y = event_SRP_turb, color = factor(clust_5cl_new))) +
+      facet_wrap(~year) +
+      geom_boxplot() +
+      scale_color_manual(name = "Cluster",
+                        values = c("#999999", "#E69F00", "#56B4E9", "#009E73", "#0072B2", "#D55E00", "#CC79A7")) +      
+      # scale_color_manual(name = "Cluster",
+      #             values = c("#999999", "#56B4E9", "#009E73", "#D55E00", "#0072B2", "#E69F00", "#CC79A7"),
+      #             labels = c("Wet; low DO/red.; pre: drier, recent \nevent; small low-int. events",
+      #                        "Cool; wet; high DO/red.; pre: higher Q, \nno recent event; small low-int. events",
+      #                        "Warm; wet; low DO/red.; pre: recent \nevent; large, low-int. high-Q events",
+      #                        "Hot; dry; high DO/red.; pre: dry, \nno recent event; large low-Q events",
+      #                        "Cold; high DO/red.; pre: no \nrecent event; long events")) + 
+      ylab(expression(atop(Ratio~of~SRP~":"~(turb.~"/"~10)~yield, "for"~each~event))) +
+      xlab("Cluster") +
+      theme1 +
+      theme(legend.position = "none",
+            strip.background = element_blank(),
+            strip.text.x = element_blank(),
+            axis.title.y = element_blank(),
+            axis.text.y = element_blank())   
+
+  # Hungerford
+    # Ratios - I plot these below
+      # Comparing 3 models
+      (pl_hf_x10 | pl_hf_x11 | pl_hf_x12) / (pl_hf_x13 | pl_hf_x14 | pl_hf_x15)
+      # Just 1 model (5 cluster model)
+      # pl_hf_x8
+      # pl_hf_x10
+```
